@@ -1,0 +1,13 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+site/
+.venv/
+release*/
+!docs/**
+*.parquet
+*.tar.gz
+wheels*/
+.DS_Store

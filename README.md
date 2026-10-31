@@ -1,0 +1,88 @@
+# IMP explorer
+
+[![tests](https://github.com/genomeanalysislcsb/imp-explorer/actions/workflows/tests.yml/badge.svg)](https://github.com/genomeanalysislcsb/imp-explorer/actions/workflows/tests.yml)
+[![docs](https://img.shields.io/badge/docs-genomeanalysislcsb.github.io%2Fimp--explorer-blue)](https://genomeanalysislcsb.github.io/imp-explorer/)
+
+**Documentation: <https://genomeanalysislcsb.github.io/imp-explorer/>**
+
+Interactive exploration of [IMP3](https://gitlab.com/uniluxembourg/lcsb/systems-ecology/imp/imp3) results
+(metagenomics + metatranscriptomics), with sRNA-IMP results as an optional layer. Stand-alone tool, and the core of
+study portals (e.g. Expobiome) that add their own layers and pages.
+
+Two steps:
+
+1. **export** (on the HPC, needs only pandas): IMP3 sample directories → one *release* directory of tables
+   (Parquet with pyarrow, else TSV.gz) + `manifest.json`.
+2. **run** (laptop / VM / container): the Dash app on a release directory.
+
+```bash
+micromamba create -y -p ./env -f environment.yml && micromamba activate ./env
+pip install --no-deps -e .  # or: pip install -e ".[app]"
+
+# all sub-directories of an IMP3 output root, ids upper-cased (bhc01 -> BHC01), metadata joined by sample_id
+imp-explorer export --imp-root /work/projects/expobiome/IMP/intra_MGMT --id-case upper \
+    --metadata metadata.tsv --study Expobiome --out release/v0.1 --threads 8
+# or an explicit sheet: sample_id, imp_dir, (metadata columns ...)
+imp-explorer export --samples samples.tsv --out release/v0.1
+
+imp-explorer run --data release/v0.1
+```
+
+## The app
+
+`imp-explorer run --data <release> [--port 8050] [--host 0.0.0.0]`, then open http://127.0.0.1:8050. On the HPC:
+start it on a node and open it through an SSH tunnel (`ssh -L 8050:<node>:8050 <login>`).
+
+| page | what it shows |
+|---|---|
+| Overview | samples per group, MAGs per sample (MIMAG tiers), sample table with metadata and key numbers |
+| QC | any QC metric by group (curated metrics first, all IMP3 summary statistics), metric vs metric |
+| Taxonomy | Kraken2/Bracken or mOTUs per omic and rank: composition, Bray-Curtis PCoA + PERMANOVA, group tests (Kruskal-Wallis / Mann-Whitney, BH-FDR), one taxon by group and mg vs mt |
+| MAGs | CheckM2 quality, GTDB taxonomy of the MAGs, abundance (mg) and activity (mt) of a taxon's MAGs by group, log2(mt/mg) per MAG, MAG catalogue |
+| Functions | KEGG KO / module / pathway, CAZy, EC per omic: most variable terms, group tests, one term by group, expression ratio mt/mg |
+| Search | one name across all layers (Kraken2, mOTUs, MAGs, functions) by group |
+
+The top bar sets the grouping variable (any metadata column with 2–12 values) and a sample filter for all pages, e.g.
+`site = Kassel` to compare groups within one site.
+
+**Plug-ins.** A study portal adds pages without touching the core: a module with `PAGES = [Page(...)]`
+(`impexplorer.app.ui.Page`: path, name, order, layout(data), register(app, data), required tables), loaded with
+`--plugin my_portal.pages` (or the entry-point group `impexplorer.pages`); extra release tables with `--table name`.
+A page only appears when its tables are in the release, so e.g. an sRNA page shows up only for studies with sRNA data.
+
+## Release tables
+
+| table | rows | content |
+|---|---|---|
+| `samples` | sample | id, IMP3 directory, `has_mg` / `has_mt`, all metadata columns |
+| `qc` | sample × omic × metric | reads per preprocessing step, R1 quality, mapping to the assembly, Nonpareil, assembly stats (`omic = mgmt`) |
+| `taxonomy` | sample × omic × source × rank × taxon | Kraken2/Bracken (domain … species) and mOTUs, reads + relative abundance |
+| `bins` | bin | CheckM2 completeness / contamination, MIMAG tier, N50, size, GC, GTDB-Tk ranks, closest reference, GRiD |
+| `bin_abundance` | sample × bin × omic | reads on the bin's contigs, mean depth, share of mapped reads, RPKM |
+| `functions` | sample × omic × db × feature | featureCounts on the Mantis annotation (default kegg_ko, kegg_module, kegg_pathway, cazy, enzyme_ec) |
+
+Keys: `sample_id`, `omic`, feature (`taxon` + `rank`, `bin_id`, `feature` + `db`). Study layers (sRNA, proteomics,
+metabolomics, immune) add tables with the same keys.
+
+## IMP3 files read
+
+| table | files (per sample directory) |
+|---|---|
+| qc | `Stats/all_stats.tsv`, `Stats/{mg,mt}/{omic}.read_stats.tsv`, `*_nonpareil.diversity.txt`, `Stats/{omic}/mgmt.assembly.contig_flagstat.txt`, `Stats/mgmt/mgmt.assembly.length.txt` |
+| taxonomy | `Analysis/taxonomy/bracken/{omic}/{rank}.bracken` (IMP3 ≥ 3.0) or `Analysis/taxonomy/kraken/{omic}.kraken_bracken_{rank}.report`; `Analysis/taxonomy/mOTUs/{omic}.mOTU.counts.tsv` |
+| bins | `Stats/all_bin_stats.tsv` (or `Stats/mgmt/mgmt.bins.tsv`) |
+| bin_abundance | `Binning/MetaWrap/bins.contigs`, `Stats/{omic}/mgmt.assembly.contig_read_count.txt`, `…contig_depth.txt` |
+| functions | `Analysis/annotation/{omic}.mantis.{db}.counts.tsv` |
+
+All files may be gzipped; missing files give empty tables (partly finished samples still load).
+
+## Tests
+
+```bash
+python3 tests/run_tests.py      # synthetic IMP3 tree in the real file formats (tests/make_fixture.py)
+```
+
+## Licence
+
+MIT, LCSB BioCore, University of Luxembourg. Related: [IMP3](https://github.com/genomeanalysislcsb/IMP3),
+[sRNA-IMP](https://github.com/genomeanalysislcsb/sRNA-IMP).

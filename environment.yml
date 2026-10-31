@@ -1,0 +1,16 @@
+# micromamba create -p <prefix> -f environment.yml && micromamba run -p <prefix> pip install --no-deps -e .
+name: imp_explorer
+channels:
+  - conda-forge
+dependencies:
+  - python=3.12
+  - pandas>=2.1
+  - numpy
+  - pyarrow>=14
+  - python-duckdb>=1.0
+  - dash>=2.17,<3
+  - dash-ag-grid>=31
+  - plotly>=5.22
+  - scipy
+  - pytest
+  - pip
