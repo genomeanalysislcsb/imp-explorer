@@ -7,7 +7,7 @@
 
 Interactive exploration of [IMP3](https://gitlab.com/uniluxembourg/lcsb/systems-ecology/imp/imp3) results
 (metagenomics + metatranscriptomics), with sRNA-IMP results as an optional layer. Stand-alone tool, and the core of
-study portals (e.g. Expobiome) that add their own layers and pages.
+study portals that add their own layers and pages.
 
 Two steps:
 
@@ -19,13 +19,15 @@ Two steps:
 micromamba create -y -p ./env -f environment.yml && micromamba activate ./env
 pip install --no-deps -e .  # or: pip install -e ".[app]"
 
-# all sub-directories of an IMP3 output root, ids upper-cased (bhc01 -> BHC01), metadata joined by sample_id
-imp-explorer export --imp-root /work/projects/expobiome/IMP/intra_MGMT --id-case upper \
-    --metadata metadata.tsv --study Expobiome --out release/v0.1 --threads 8
+# all sample folders below an IMP3 output root; folder name = sample id, metadata joined by sample_id
+imp-explorer export --imp-root /path/to/IMP3_outputs --metadata /path/to/metadata.tsv \
+    --study "My study" --out /path/to/release_v0.1 --threads 8
+# folder names that differ from the metadata ids: translate them (see the docs)
+imp-explorer export --imp-root /path/to/IMP3_outputs --id-regex 'run_(\w+)' --id-case upper ...
 # or an explicit sheet: sample_id, imp_dir, (metadata columns ...)
-imp-explorer export --samples samples.tsv --out release/v0.1
+imp-explorer export --samples /path/to/samples.tsv --out /path/to/release_v0.1
 
-imp-explorer run --data release/v0.1
+imp-explorer run --data /path/to/release_v0.1
 ```
 
 ## The app
@@ -43,7 +45,7 @@ start it on a node and open it through an SSH tunnel (`ssh -L 8050:<node>:8050 <
 | Search | one name across all layers (Kraken2, mOTUs, MAGs, functions) by group |
 
 The top bar sets the grouping variable (any metadata column with 2–12 values) and a sample filter for all pages, e.g.
-`site = Kassel` to compare groups within one site.
+`site = site_1` to compare groups within one site.
 
 **Plug-ins.** A study portal adds pages without touching the core: a module with `PAGES = [Page(...)]`
 (`impexplorer.app.ui.Page`: path, name, order, layout(data), register(app, data), required tables), loaded with

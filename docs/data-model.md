@@ -6,7 +6,7 @@ be combined with any other and with the metadata.
 
 | key | meaning | example |
 |---|---|---|
-| `sample_id` | one sample (one IMP3 run) | `BHC01` |
+| `sample_id` | one sample (one IMP3 run) | `S01` |
 | `omic` | data layer of the sample | `mg` metagenome, `mt` metatranscriptome, `mgmt` assembly |
 | feature | the measured thing, with its namespace | `taxon` + `rank`, `bin_id`, `feature` + `db` |
 
@@ -15,7 +15,7 @@ be combined with any other and with the metadata.
 | column | type | content |
 |---|---|---|
 | `sample_id` | str | sample id |
-| `imp_dir` | str | IMP3 output folder (not shown in the app) |
+| `imp_dir` | str | IMP3 output folder, relative to `--imp-root` / the sample sheet by default (`--paths`); not shown in the app |
 | `has_mg`, `has_mt` | bool | metagenome / metatranscriptome present |
 | *metadata* | any | every column of `--metadata` |
 
@@ -71,5 +71,5 @@ normalises within (sample, omic, db).
 {"release": "release_v0.1", "study": "My study", "created": "2026-10-31T14:54:45", "impexplorer": "0.1.0",
  "tables": {"samples": {"rows": 180, "file": "samples.parquet", "doc": "..."}, "...": {}},
  "sources": {"pipeline": "IMP3", "function_dbs": ["kegg_ko", "..."]},
- "failed_samples": {}}
+ "failed_samples": {}, "metadata_without_output": []}
 ```

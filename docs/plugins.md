@@ -58,8 +58,9 @@ Write extra tables into the release directory as `<name>.parquet` (or `.tsv.gz`)
 (`sample_id`, `omic`, a feature column). Pass them with `--table <name>`; they are then available as DuckDB views of
 the same name.
 
-## Example: the Expobiome portal
+## Example: a multi-omics study portal
 
-The planned Expobiome portal uses the IMP explorer for metagenomics and metatranscriptomics, and adds the
-sRNA-IMP results (intra- and extracellular small RNA), metaproteomics, metabolomics, flow cytometry and
-cytokines as study layers, plus a cross-layer feature search and pages for the paper's figures.
+A study with more data layers than IMP3 covers uses the IMP explorer for metagenomics and metatranscriptomics and
+adds, as plug-ins: small-RNA results (e.g. from [sRNA-IMP](https://github.com/genomeanalysislcsb/sRNA-IMP)),
+metaproteomics, metabolomics or host data as extra tables with the same keys, a cross-layer feature search, and
+pages for the figures of its paper.

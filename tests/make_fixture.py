@@ -42,9 +42,9 @@ def kreport(rows):
     return "".join("%.2f\t%d\t%d\t%s\t%s\t%s\n" % r for r in rows)
 
 
-def make_sample(root, sid, group, rng, old_bracken):
-    b = os.path.join(root, sid)
-    shift = {"HC": 1.0, "PD": 1.8, "RA": 0.6}[group]
+def make_sample(root, sid, group, rng, old_bracken, folder=None):
+    b = os.path.join(root, folder or sid)
+    shift = {"control": 1.0, "case_a": 1.8, "case_b": 0.6}[group]
     w(os.path.join(b, "status", "all.done"), "")
     # reads
     for o, n in (("mg", rng.randint(25, 40) * 10 ** 6), ("mt", rng.randint(35, 55) * 10 ** 6)):
@@ -141,22 +141,28 @@ def make_sample(root, sid, group, rng, old_bracken):
                       for i, g in enumerate(GENERA)) + "unassigned\t1234\n")
         # functions
         kos = {k: rng.lognormvariate(8, 1) * (2.5 if o == "mt" and k == "K01803" else 1) for k in KOS}
-        if group == "PD":
+        if group == "case_a":
             kos["K00873"] *= 2
         w(os.path.join(b, "Analysis", "annotation", "%s.mantis.kegg_ko.counts.tsv.gz" % o), fc_table(o, "kegg_ko", kos))
         w(os.path.join(b, "Analysis", "annotation", "%s.mantis.kegg_module.counts.tsv.gz" % o),
           fc_table(o, "kegg_module", {m: rng.lognormvariate(9, 1) for m in MODULES}))
 
 
-def main(out, n=12, seed=7):
+GROUPS = ("control", "case_a", "case_b")
+
+
+def main(out, n=12, seed=7, folder_fmt="{sid}"):
+    """n samples S01 ... in OUTDIR/imp/<folder_fmt>/, metadata in OUTDIR/metadata.tsv (sample_id, group, site, age,
+    sex). folder_fmt formats the folder name from the sample id, e.g. "run_{sid_lower}" to test id translation."""
     rng = random.Random(seed)
     root = os.path.join(out, "imp")
     md = ["sample_id\tgroup\tsite\tage\tsex"]
     for i in range(n):
-        group = ("HC", "PD", "RA")[i % 3]
-        sid = "%s%02d" % ({"HC": "BHC", "PD": "KPC", "RA": "BRC"}[group], i + 1)
-        make_sample(root, sid, group, rng, old_bracken=(i % 2 == 0))
-        md.append("%s\t%s\t%s\t%d\t%s" % (sid, group, "Berlin" if group != "PD" else "Kassel", rng.randint(45, 75),
+        group = GROUPS[i % 3]
+        sid = "S%02d" % (i + 1)
+        folder = folder_fmt.format(sid=sid, sid_lower=sid.lower(), i=i + 1)
+        make_sample(root, sid, group, rng, old_bracken=(i % 2 == 0), folder=folder)
+        md.append("%s\t%s\t%s\t%d\t%s" % (sid, group, "site_%d" % (1 + (i // 3) % 2), rng.randint(45, 75),
                                           rng.choice("FM")))
     w(os.path.join(out, "metadata.tsv"), "\n".join(md) + "\n")
     return root

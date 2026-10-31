@@ -4,7 +4,7 @@ The top bar holds three controls that every page follows:
 
 - **group by**: any metadata column with 2–12 values (default `group` if present). Colours, box plots, group tests
   and PERMANOVA use it.
-- **filter** / **values**: keep only samples with the chosen values of one column, e.g. `site = Kassel` to compare
+- **filter** / **values**: keep only samples with the chosen values of one column, e.g. `site = site_1` to compare
   groups within one site.
 
 Tables can be sorted and filtered in their column headers; clicking a row of a group-test table plots that feature.

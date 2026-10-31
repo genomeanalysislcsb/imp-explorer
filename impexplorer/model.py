@@ -1,6 +1,6 @@
 """Release data model of the IMP explorer.
 
-Every table is long format and joins on the same keys, so a study portal (e.g. Expobiome) can add its own layers
+Every table is long format and joins on the same keys, so a study portal can add its own layers
 (proteomics, metabolomics, immune, sRNA) without changing the IMP core:
 
   sample_id   one stool / environmental sample (the IMP3 run)

@@ -41,8 +41,9 @@ proteomics, metabolomics, immune data) as extra tables and pages, without changi
 micromamba create -y -p ./env -f environment.yml && micromamba activate ./env
 pip install --no-deps -e .
 
-imp-explorer export --imp-root /path/to/IMP3/outputs --metadata metadata.tsv --study "My study" --out release_v0.1
-imp-explorer run --data release_v0.1          # http://127.0.0.1:8050
+imp-explorer export --imp-root /path/to/IMP3_outputs --metadata /path/to/metadata.tsv \
+    --study "My study" --out /path/to/release_v0.1
+imp-explorer run --data /path/to/release_v0.1          # http://127.0.0.1:8050
 ```
 
 ## Citation and licence
