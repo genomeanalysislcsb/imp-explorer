@@ -261,6 +261,8 @@ class Cohort:
                         tax = read_table(self.release, "taxonomy")
                     src = "kraken2_bracken" if parts[0] == "kraken" else "motus"
                     d = tax[(tax["source"] == src) & (tax["rank"] == parts[1]) & (tax["omic"] == parts[2])]
+                    if src == "motus" and parts[1] == "species" and d.empty:
+                        d = self._old_motus(tax, parts[2])
                     M = d.pivot_table(index="sample_id", columns="taxon", values="reads", aggfunc="sum", fill_value=0)
                     lab = "%s %s, %s" % (LAYER_LABEL[parts[0]], parts[1], OMIC[parts[2]])
                     self._add(key, lab, parts[2], M)
@@ -300,6 +302,18 @@ class Cohort:
                 self.layers[key] = Layer(key, "mt/mg ratio, %s" % mg.label.rsplit(",", 1)[0], "mt/mg", "ratio", Y,
                                          db=mg.db)
         self.add_alpha()
+
+    def _old_motus(self, tax, omic):
+        """mOTUs of releases exported before imp-explorer 0.1.1: every row has rank 'motu' and the full lineage as
+        name; the species-level mOTUs are the rows with an mOTU id -> their species name"""
+        d = tax[(tax["source"] == "motus") & (tax["rank"] == "motu") & (tax["omic"] == omic)]
+        d = d[d["taxid"].fillna("").astype(str).str.contains("mOTU")].copy()
+        if len(d):
+            d["taxon"] = (d["taxon"].astype(str).str.split("|").str[-1].str.replace(r"^[a-z]__", "", regex=True)
+                          .str.replace(r"\s*\[[^\]]+\]\s*$", "", regex=True).str.strip())
+            self.note("mOTUs %s: release from an older export (rank 'motu'); %d species-level rows used — "
+                      "re-export for all mOTUs ranks in the app" % (omic, len(d)))
+        return d
 
     def _add(self, key, label, omic, M, db=None):
         M.index = M.index.astype(str)

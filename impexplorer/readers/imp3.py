@@ -162,7 +162,10 @@ MOTU_RANKS = {"k": "domain", "p": "phylum", "c": "class", "o": "order", "f": "fa
 def _motus(path, sample, omic):
     """mOTUs profile: '#'-comment lines (last: '#consensus_taxonomy\t<sample>'); plain (one row per mOTU) or
     hierarchical (-p -A / -k all: 'k__Bacteria|p__...|...' rows for every rank). Ranked rows keep their rank
-    (domain ... species, 'motu' for single mOTUs); 'unassigned' rows are dropped."""
+    (domain ... species). An mOTU is a species-level cluster: its row ('s__<name> [ref_mOTU_...]', or
+    '<name> [ref_mOTU_...]' in a plain profile) gets rank 'species', the mOTU id as taxid; several mOTUs with the
+    same species name are summed by the app. 't__' rows and unparsed names get rank 'motu'; 'unassigned' rows are
+    dropped."""
     rows = []
     for line in text(path).splitlines():
         if not line or line.startswith("#"):
@@ -178,8 +181,10 @@ def _motus(path, sample, omic):
             continue
         m = re.search(r"\[((?:ref|meta|ext)_mOTU_v\d+_\d+)\]", leaf)
         pm = re.match(r"([kpcofgst])__(.*)$", leaf)
-        if m or (pm and pm.group(1) == "t"):
-            rank, name = "motu", re.sub(r"^[a-z]__", "", leaf)
+        if pm and pm.group(1) == "t":
+            rank, name = "motu", pm.group(2)
+        elif m:
+            rank, name = "species", re.sub(r"^[a-z]__", "", leaf)
         elif pm:
             rank, name = MOTU_RANKS[pm.group(1)], pm.group(2)
         else:

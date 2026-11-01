@@ -45,7 +45,8 @@ def test_new_bracken_layout(tmp_path):
     t = imp3.taxonomy(os.path.join(root, sid), sid)
     assert len(t[(t["source"] == "kraken2_bracken") & (t["rank"] == "species") & (t["omic"] == "mg")]) == 10
     mo = t[(t["source"] == "motus") & (t["omic"] == "mg")]          # hierarchical mOTUs: one profile per rank
-    assert set(mo["rank"]) == {"genus", "motu"} and "unassigned" not in set(mo["taxon"])
+    assert set(mo["rank"]) == {"genus", "species"} and "unassigned" not in set(mo["taxon"])
+    assert mo[mo["rank"] == "species"]["taxid"].str.startswith("ref_mOTU").all()
     assert abs(mo.groupby("rank")["rel_abundance"].sum() - 1).max() < 1e-9
 
 
