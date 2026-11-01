@@ -229,7 +229,7 @@ def clustered_heatmap(M, groups, cmap, rows="variance", cols="top", values="log"
                         row_heights=heights, column_widths=[0.09 if rZ is not None else 0.001, 0.91],
                         horizontal_spacing=0.004, vertical_spacing=0.006)
     hr = len(heights)
-    xs = np.arange(len(sorder))
+    xs = list(range(len(sorder)))          # plain lists: no int64 typed arrays (plotly >= 6 with dash 2)
     if show_cd:
         dx, dy = _dendro_lines(cZ, "top")
         fig.add_trace(go.Scatter(x=dx, y=dy, mode="lines", line=dict(color="#7b8794", width=0.8),
@@ -241,7 +241,7 @@ def clustered_heatmap(M, groups, cmap, rows="variance", cols="top", values="log"
         levels = sorted(ser.unique())
         pal = {lv: (cmap.get(lv) if name == "group" else ANNOT_PAL[j % len(ANNOT_PAL)]) or "#999"
                for j, lv in enumerate(levels)}
-        code = ser.map({lv: j for j, lv in enumerate(levels)}).values
+        code = [int(x) for x in ser.map({lv: j for j, lv in enumerate(levels)})]
         k = max(len(levels), 1)
         scale = []
         for j, lv in enumerate(levels):
@@ -255,7 +255,7 @@ def clustered_heatmap(M, groups, cmap, rows="variance", cols="top", values="log"
                            font=dict(size=10))
     # heatmap
     text = [[f"{f} · {s}" for s in sorder] for f in forder]
-    fig.add_trace(go.Heatmap(z=Z.T.values, x=xs, y=np.arange(len(forder)), colorscale="RdBu_r", zmid=0, zmin=-3,
+    fig.add_trace(go.Heatmap(z=Z.T.values.astype(float).tolist(), x=xs, y=list(range(len(forder))), colorscale="RdBu_r", zmid=0, zmin=-3,
                              zmax=3, colorbar=dict(title="z", thickness=10, len=min(0.6, 300 / max(height or 600, 300)), y=0, yanchor="bottom", x=1.0, xanchor="left", xpad=110 if rZ is not None else 10), text=text,
                              hovertemplate="%{text}<br>z %{z:.2f}<extra></extra>"), row=hr, col=2)
     lab = ylabels or {}
