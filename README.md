@@ -47,9 +47,9 @@ start it on a node and open it through an SSH tunnel (`ssh -L 8050:<node>:8050 <
 |---|---|
 | Overview | samples per group, MAGs per sample (MIMAG tiers), sample table with metadata and key numbers |
 | QC | any QC metric by group (curated metrics first, all IMP3 summary statistics), metric vs metric |
-| Taxonomy | Kraken2/Bracken or mOTUs per omic and rank: composition, Bray-Curtis PCoA + PERMANOVA, group tests (Kruskal-Wallis / Mann-Whitney, BH-FDR), one taxon by group and mg vs mt |
+| Taxonomy | Kraken2/Bracken or mOTUs per omic and rank: composition (stacked bars or clustered heatmap), Bray-Curtis PCoA + PERMANOVA, group tests (Kruskal-Wallis / Mann-Whitney, BH-FDR), one taxon by group and mg vs mt |
 | MAGs | CheckM2 quality, GTDB taxonomy of the MAGs, abundance (mg) and activity (mt) of a taxon's MAGs by group, log2(mt/mg) per MAG, MAG catalogue |
-| Functions | KEGG KO / module / pathway, CAZy, EC per omic: most variable terms, group tests, one term by group, expression ratio mt/mg |
+| Functions | KEGG KO / module / pathway, CAZy, EC per omic: clustered heatmap of the most variable terms (rows / samples clustered, CLR or log, site colour bar), group tests, one term by group, expression ratio mt/mg |
 | Search | one name across all layers (Kraken2, mOTUs, MAGs, functions) by group |
 | Cohort | results of `imp-explorer cohort`: group comparisons within blocks, adjusted models (volcano + table per model, layer, term), beta diversity, QC and covariates |
 
@@ -71,6 +71,7 @@ A page only appears when its tables are in the release, so e.g. an sRNA page sho
 | `bins` | bin | CheckM2 completeness / contamination, MIMAG tier, N50, size, GC, GTDB-Tk ranks, closest reference, GRiD |
 | `bin_abundance` | sample × bin × omic | reads on the bin's contigs, mean depth, share of mapped reads, RPKM |
 | `functions` | sample × omic × db × feature | featureCounts on the Mantis annotation (default kegg_ko, kegg_module, kegg_pathway, cazy, enzyme_ec) |
+| `cohort_*` | (optional) | results of `imp-explorer cohort`: tests, models, PERMANOVA, ordination, QC, covariates (see the docs) |
 
 Keys: `sample_id`, `omic`, feature (`taxon` + `rank`, `bin_id`, `feature` + `db`). Study layers (sRNA, proteomics,
 metabolomics, immune) add tables with the same keys.

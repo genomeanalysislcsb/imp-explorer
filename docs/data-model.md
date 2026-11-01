@@ -37,7 +37,7 @@ be combined with any other and with the metadata.
 |---|---|
 | `sample_id`, `omic` | |
 | `source` | `kraken2_bracken` or `motus` |
-| `rank` | domain, phylum, class, order, family, genus, species; `motu` for single mOTUs |
+| `rank` | domain, phylum, class, order, family, genus, species. mOTUs: each mOTU (a species-level cluster) is a `species` row with the mOTU id as `taxid`; mOTUs with the same species name are summed in the app. Releases exported before 0.1.1 have all mOTUs rows as rank `motu` with the full lineage as name; the cohort analysis still reads them, a new export gives the ranks. |
 | `taxon`, `taxid` | name and id (of the Kraken2 database set in IMP3, NCBI or GTDB; mOTU id for mOTUs) |
 | `reads` | Bracken estimated reads / mOTUs read counts |
 | `rel_abundance` | reads / all reads of the profile (sample, omic, source, rank); unclassified reads excluded |
