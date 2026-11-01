@@ -242,3 +242,27 @@ def test_cohort_on_fixture(tmp_path):
     assert "Cohort" in [p.name for p in app._imp_pages]
     page = next(p for p in app._imp_pages if p.name == "Cohort")
     assert page.layout(app._imp_data) is not None
+
+
+def test_clustered_heatmap_modes():
+    try:
+        import plotly  # noqa: F401
+        import scipy  # noqa: F401
+        import dash_ag_grid  # noqa: F401
+    except ImportError:
+        return
+    import numpy as np
+    from impexplorer.app.pages._common import clustered_heatmap
+    rng = np.random.default_rng(0)
+    M = pd.DataFrame(rng.random((24, 30)), index=["S%02d" % i for i in range(24)],
+                     columns=["K%05d" % i for i in range(30)])
+    M.iloc[:, 3] = 0                                    # a constant feature must not break the clustering
+    g = pd.Series(["a", "b", "c"] * 8, index=M.index)
+    site = {"site": pd.Series(["x"] * 12 + ["y"] * 12, index=M.index)}
+    for rows in ("variance", "cluster"):
+        for cols in ("top", "within", "all"):
+            for values in ("log", "clr"):
+                fig = clustered_heatmap(M, g, {"a": "#111", "b": "#222", "c": "#333"}, rows, cols, values, top=20,
+                                        annot=site)
+                heat = [t for t in fig.data if t.type == "heatmap"][-1]
+                assert np.asarray(heat.z).shape == (20, 24)

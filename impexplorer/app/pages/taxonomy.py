@@ -8,7 +8,9 @@ from dash import Input, Output, State, html
 from ..stats import group_tests
 from ..links import anchor
 from ..ui import GLOBAL, Page, card, control, dd, empty_fig, graph, style
-from ._common import box_by_group, grid, matrix, ordination, selection, stacked
+from ._common import (HEAT_COLS, HEAT_ROWS, HEAT_VALUES, box_by_group, clustered_heatmap, grid, matrix,
+                      ordination, selection, stacked)
+from .functions import annot_options, annot_series, default_annot
 
 SOURCE = {"kraken2_bracken": "Kraken2/Bracken", "motus": "mOTUs"}
 RANK_ORDER = ["domain", "phylum", "class", "order", "family", "genus", "species", "motu"]
@@ -38,9 +40,21 @@ def layout(data):
                "(who is there) and the metatranscriptome (who is active). Abundances are relative within each profile.",
                className="lead"),
         html.Div([control("profile", dd("tx-prof", opts, v0)),
-                  control("taxa shown", dd("tx-top", [10, 15, 20, 30], 15))], className="controls"),
-        card("Composition", graph("tx-bar"), note="top taxa by mean relative abundance; samples sorted by group, "
-             "then by the most abundant taxon"),
+                  control("taxa shown", dd("tx-top", [10, 15, 20, 30, 40, 60], 15)),
+                  control("view", dd("tx-view", [{"label": "stacked bars", "value": "bars"},
+                                                 {"label": "heatmap", "value": "heat"}], "bars"))],
+                 className="controls"),
+        card("Composition",
+             html.Div([control("taxa (rows)", dd("tx-hrows", HEAT_ROWS, "cluster")),
+                       control("samples (columns)", dd("tx-hcols", HEAT_COLS, "within")),
+                       control("values", dd("tx-hval", HEAT_VALUES, "clr")),
+                       control("colour bar", dd("tx-hann", annot_options(data), default_annot(data)))],
+                      id="tx-hctl", className="controls", style={"display": "none"}),
+             graph("tx-bar"),
+             note="stacked bars: top taxa by mean relative abundance, samples sorted by group, then by the most "
+                  "abundant taxon. Heatmap: z-scores of the most variable taxa (present in >= 10 % of samples), "
+                  "optionally clustered (average linkage; correlation distance between taxa, Euclidean between "
+                  "samples)."),
         html.Div(style={"height": "16px"}),
         html.Div([
             card("Beta diversity", graph("tx-pcoa"), note="Bray-Curtis on relative abundances; PERMANOVA by the "
@@ -63,16 +77,23 @@ def layout(data):
 def register(app, data):
     @app.callback(Output("tx-bar", "figure"), Output("tx-pcoa", "figure"), Output("tx-tests", "children"),
                   Output("tx-taxon", "options"), Output("tx-taxon", "value"),
-                  Input("tx-prof", "value"), Input("tx-top", "value"),
+                  Input("tx-prof", "value"), Input("tx-top", "value"), Input("tx-view", "value"),
+                  Input("tx-hrows", "value"), Input("tx-hcols", "value"), Input("tx-hval", "value"),
+                  Input("tx-hann", "value"),
                   Input(GLOBAL[0], "value"), Input(GLOBAL[1], "value"), Input(GLOBAL[2], "value"))
-    def _main(prof, top, group, fcol, fval):
+    def _main(prof, top, view, hrows, hcols, hval, hann, group, fcol, fval):
         if not prof:
             return empty_fig(), empty_fig(), None, [], None
         s, g, cmap = selection(data, group, fcol, fval)
         M = load(data, prof, s)
         if M.empty:
             return empty_fig(), empty_fig(), None, [], None
-        bar = stacked(M, g, top=int(top or 15))
+        if view == "heat":
+            P = M.loc[:, (M > 0).mean() >= 0.1]
+            bar = clustered_heatmap(P, g, cmap, rows=hrows, cols=hcols, values=hval, top=int(top or 15),
+                                    annot=annot_series(data, hann, s) if hann != group else None)
+        else:
+            bar = stacked(M, g, top=int(top or 15))
         pc = ordination(M, g, cmap)
         t = group_tests(M, g.reindex(M.index).fillna("NA").values) if g.nunique() > 1 else None
         if t is not None and len(t):
@@ -84,6 +105,10 @@ def register(app, data):
             first = M.mean().idxmax()
         order = M.mean().sort_values(ascending=False).index
         return bar, pc, tests, [{"label": x, "value": x} for x in order], first
+
+    @app.callback(Output("tx-hctl", "style"), Input("tx-view", "value"))
+    def _hctl(view):
+        return {"display": "flex"} if view == "heat" else {"display": "none"}
 
     @app.callback(Output("tx-taxon", "value", allow_duplicate=True), Input("tx-grid", "selectedRows"),
                   prevent_initial_call=True)

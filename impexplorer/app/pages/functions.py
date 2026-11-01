@@ -9,7 +9,8 @@ from dash import Input, Output, html
 from ..links import anchor, md, url
 from ..stats import group_tests
 from ..ui import GLOBAL, Page, card, control, dd, empty_fig, graph, style
-from ._common import box_by_group, grid, matrix, order_samples, selection
+from ._common import (HEAT_COLS, HEAT_ROWS, HEAT_VALUES, box_by_group, clustered_heatmap, grid, matrix,
+                      selection)
 
 DB_LABEL = {"kegg_ko": "KEGG orthologs", "kegg_module": "KEGG modules", "kegg_pathway": "KEGG pathways",
             "cazy": "CAZymes", "enzyme_ec": "EC numbers"}
@@ -20,6 +21,20 @@ def load(data, db, omic, samples):
                "(SELECT UNNEST(?::VARCHAR[]))", [db, omic, list(samples["sample_id"])])
     M = matrix(d, value="reads", feature="feature")
     return M.div(M.sum(axis=1).replace(0, np.nan), axis=0).fillna(0) if not M.empty else M
+
+
+def annot_options(data):
+    return [{"label": "(none)", "value": ""}] + [{"label": c, "value": c} for c in data.group_cols]
+
+
+def default_annot(data):
+    return next((c for c in ("site", "Site", "centre", "center", "batch") if c in data.group_cols), "")
+
+
+def annot_series(data, col, samples):
+    if not col or col not in samples.columns:
+        return None
+    return {col: pd.Series(samples[col].astype(str).values, index=samples["sample_id"])}
 
 
 def layout(data):
@@ -34,11 +49,21 @@ def layout(data):
                                          "kegg_module" if "kegg_module" in dbs else (dbs[0] if dbs else None))),
                   control("omic", dd("fn-omic", omics, "mt" if "mt" in omics else (omics[0] if omics else None))),
                   control("min. prevalence", dd("fn-prev", [0.1, 0.25, 0.5, 0.9], 0.5))], className="controls"),
-        html.Div([card("Most variable terms", graph("fn-heat"), note="z-score of log10 relative abundance, top 40 "
-                       "terms by variance; samples sorted by group"),
-                  card("Differences between groups", html.Div(id="fn-tests"),
-                       note="Kruskal-Wallis (2 groups: Mann-Whitney) per term at the chosen prevalence, BH-FDR; "
-                            "click a row to plot it")], className="grid g2"),
+        card("Most variable terms",
+             html.Div([control("terms (rows)", dd("fn-hrows", HEAT_ROWS, "cluster")),
+                       control("samples (columns)", dd("fn-hcols", HEAT_COLS, "within")),
+                       control("values", dd("fn-hval", HEAT_VALUES, "log")),
+                       control("colour bar", dd("fn-hann", annot_options(data), default_annot(data)))],
+                      className="controls"),
+             graph("fn-heat"),
+             note="z-scores of the 40 most variable terms. Clustered: average linkage with optimal leaf order; "
+                  "correlation distance between terms, Euclidean distance between samples. CLR: log-ratio to the "
+                  "sample's mean term (compositional), then z per term. A tree always forms, also from noise: "
+                  "check blocks against the group tests and the ordination."),
+        html.Div(style={"height": "16px"}),
+        card("Differences between groups", html.Div(id="fn-tests"),
+             note="Kruskal-Wallis (2 groups: Mann-Whitney) per term at the chosen prevalence, BH-FDR; "
+                  "click a row to plot it"),
         html.Div(style={"height": "16px"}),
         html.Div([control("term", dd("fn-term", [], None, placeholder="type to search")),
                   html.Div(id="fn-link", className="linkbox")], className="controls"),
@@ -51,9 +76,10 @@ def layout(data):
 def register(app, data):
     @app.callback(Output("fn-heat", "figure"), Output("fn-tests", "children"), Output("fn-term", "options"),
                   Output("fn-term", "value"), Input("fn-db", "value"), Input("fn-omic", "value"),
-                  Input("fn-prev", "value"),
+                  Input("fn-prev", "value"), Input("fn-hrows", "value"), Input("fn-hcols", "value"),
+                  Input("fn-hval", "value"), Input("fn-hann", "value"),
                   Input(GLOBAL[0], "value"), Input(GLOBAL[1], "value"), Input(GLOBAL[2], "value"))
-    def _main(db, omic, prev, group, fcol, fval):
+    def _main(db, omic, prev, hrows, hcols, hval, hann, group, fcol, fval):
         if not db or not omic:
             return empty_fig(), None, [], None
         s, g, cmap = selection(data, group, fcol, fval)
@@ -61,33 +87,16 @@ def register(app, data):
         if M.empty:
             return empty_fig(), None, [], None
         M = M.loc[:, (M > 0).mean() >= float(prev or 0.5)]
-        L = np.log10(M + 1e-6)
-        top = L.var().sort_values(ascending=False).index[:40]
-        Z = (L[top] - L[top].mean()) / L[top].std().replace(0, 1)
-        order = order_samples(M[top], g, None)
-        Z = Z.loc[order]
-        gg = g.reindex(Z.index).fillna("NA")
-        heat = go.Figure(go.Heatmap(z=Z.T.values, x=list(Z.index), y=list(Z.columns), colorscale="RdBu_r", zmid=0,
-                                    zmin=-3, zmax=3, colorbar=dict(title="z", thickness=10),
-                                    hovertemplate="%{y} · %{x}<br>z %{z:.2f}<extra></extra>"))
-        pos = 0
-        for lv, n in gg.groupby(gg, sort=False).size().items():
-            heat.add_annotation(x=pos + n / 2 - 0.5, y=1.02, yref="paper", text="<b>%s</b>" % lv, showarrow=False,
-                                font=dict(size=11, color=cmap.get(lv)))
-            if pos:
-                heat.add_vline(x=pos - 0.5, line=dict(color="#1f2933", width=1.5))
-            pos += n
-        heat.update_xaxes(showticklabels=False)
-        heat.update_yaxes(tickfont=dict(size=9), autorange="reversed", tickmode="array", tickvals=list(Z.columns),
-                         ticktext=['<a href="%s" target="_blank">%s</a>' % (url(db, c), c) if url(db, c) else c
-                                   for c in Z.columns])
-        style(heat, 560, legend=False)
+        heat = clustered_heatmap(M, g, cmap, rows=hrows, cols=hcols, values=hval, top=40,
+                                 annot=annot_series(data, hann, s) if hann != group else None,
+                                 ylabels={c: '<a href="%s" target="_blank">%s</a>' % (url(db, c), c) if url(db, c)
+                                          else c for c in M.columns})
         if g.nunique() > 1:
             t = group_tests(M, g.reindex(M.index).fillna("NA").values,
                             min_prev=float(prev or 0.5))
             t = t.rename(columns={"feature": "term"})
             t.insert(1, "link", [md(db, x) for x in t["term"]])
-            tests = grid("fn-grid", t.head(1000), height=560)
+            tests = grid("fn-grid", t.head(1000), height=420, fit=True)
             first = t["term"].iloc[0] if len(t) else M.mean().idxmax()
         else:
             tests, first = html.P("choose a 'group by' variable with at least two groups", className="hint"), \

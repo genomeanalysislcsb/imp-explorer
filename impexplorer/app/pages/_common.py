@@ -131,3 +131,155 @@ def grid(id_, df, height=380, number_cols=(), page_size=None, fit=False):
                       columnSize="responsiveSizeToFit" if fit else "autoSize", style={"height": height},
                       dashGridOptions={"rowSelection": "single", "pagination": bool(page_size),
                                        "paginationPageSize": page_size or 100, "animateRows": False})
+
+
+# ----------------------------------------------------------------------------- clustered heatmap
+HEAT_ROWS = [{"label": "by variance", "value": "variance"}, {"label": "clustered", "value": "cluster"}]
+HEAT_COLS = [{"label": "by group, then top feature", "value": "top"},
+             {"label": "clustered within group", "value": "within"},
+             {"label": "clustered (all samples)", "value": "all"}]
+HEAT_VALUES = [{"label": "z of log10 abundance", "value": "log"}, {"label": "z of CLR", "value": "clr"}]
+ANNOT_PAL = ["#8f5aa8", "#66a182", "#e07a5f", "#3d405b", "#81b29a", "#f2cc8f", "#6d597a", "#b56576", "#457b9d",
+             "#9c6644", "#52796f", "#cad2c5"]
+
+
+def _linkage(X, metric):
+    """average-linkage tree of the rows of X with optimal leaf ordering; None if not possible"""
+    from scipy.cluster.hierarchy import linkage
+    if X.shape[0] < 3:
+        return None
+    X = np.nan_to_num(np.asarray(X, float))
+    if metric == "correlation":                     # constant rows have no correlation: tiny jitter keeps them
+        X = X + np.random.default_rng(0).normal(0, 1e-9, X.shape)
+    try:
+        return linkage(X, method="average", metric=metric, optimal_ordering=True)
+    except Exception:
+        return None
+
+
+def _leaves(Zl, n):
+    from scipy.cluster.hierarchy import leaves_list
+    return list(leaves_list(Zl)) if Zl is not None else list(range(n))
+
+
+def _dendro_lines(Zl, orient):
+    """dendrogram segments in heatmap coordinates (leaf i at position i); orient 'left' (rows) or 'top' (cols)"""
+    from scipy.cluster.hierarchy import dendrogram
+    d = dendrogram(Zl, no_plot=True)
+    xs, ys = [], []
+    for ic, dc in zip(d["icoord"], d["dcoord"]):
+        pos = [(v - 5) / 10.0 for v in ic]
+        if orient == "left":
+            xs += [-h for h in dc] + [None]
+            ys += pos + [None]
+        else:
+            xs += pos + [None]
+            ys += list(dc) + [None]
+    return xs, ys
+
+
+def heatmap_matrix(M, values="log", top=40):
+    """M: samples x features (relative abundances) -> z-scores of the `top` most variable features"""
+    if values == "clr":
+        pseudo = M[M > 0].min().min() / 2 if (M > 0).any().any() else 1e-6
+        L = np.log(M + pseudo)
+        L = L.sub(L.mean(axis=1), axis=0)
+    else:
+        L = np.log10(M + 1e-6)
+    feats = L.var().sort_values(ascending=False).index[:top]
+    Z = (L[feats] - L[feats].mean()) / L[feats].std().replace(0, 1)
+    return Z, M[feats]
+
+
+def clustered_heatmap(M, groups, cmap, rows="variance", cols="top", values="log", top=40, annot=None,
+                      ylabels=None, height=None, title=None):
+    """heatmap of the most variable features (rows) x samples (columns) with optional clustering.
+    rows: 'variance' | 'cluster' (correlation distance, average linkage, dendrogram on the left);
+    cols: 'top' (group, then the first feature) | 'within' (clustered within each group) | 'all' (clustered over
+    all samples, dendrogram on top); annot: {name: Series sample -> value} colour bars above the heatmap (the group
+    bar is always shown); ylabels: tick text per feature (e.g. links)."""
+    from plotly.subplots import make_subplots
+    if M.empty or M.shape[1] < 2:
+        return empty_fig()
+    Z, Mt = heatmap_matrix(M, values, top)
+    g = groups.reindex(Z.index).fillna("NA")
+    # feature order
+    rZ = _linkage(Z.T.values, "correlation") if rows == "cluster" else None
+    forder = [Z.columns[i] for i in _leaves(rZ, Z.shape[1])]
+    # sample order
+    cZ = None
+    if cols == "all":
+        cZ = _linkage(Z.values, "euclidean")
+        sorder = [Z.index[i] for i in _leaves(cZ, Z.shape[0])]
+    elif cols == "within":
+        sorder = []
+        for lv in sorted(g.unique()):
+            ids = list(g.index[g == lv])
+            sub = Z.loc[ids]
+            sorder += [ids[i] for i in _leaves(_linkage(sub.values, "euclidean"), len(ids))]
+    else:
+        sorder = list(order_samples(Mt, g, Mt.columns[0]))
+    Z = Z.loc[sorder, forder]
+    g = g.loc[sorder]
+    bars = [("group", g)] + [(k, v.reindex(sorder).fillna("NA").astype(str)) for k, v in (annot or {}).items()]
+    nb = len(bars)
+    show_cd = cZ is not None
+    heights = ([0.12] if show_cd else []) + [0.035] * nb + [1.0]
+    fig = make_subplots(rows=len(heights), cols=2, shared_xaxes=True, shared_yaxes=False,
+                        row_heights=heights, column_widths=[0.09 if rZ is not None else 0.001, 0.91],
+                        horizontal_spacing=0.004, vertical_spacing=0.006)
+    hr = len(heights)
+    xs = np.arange(len(sorder))
+    if show_cd:
+        dx, dy = _dendro_lines(cZ, "top")
+        fig.add_trace(go.Scatter(x=dx, y=dy, mode="lines", line=dict(color="#7b8794", width=0.8),
+                                 hoverinfo="skip", showlegend=False), row=1, col=2)
+        fig.update_yaxes(visible=False, row=1, col=2)
+    # annotation bars
+    for i, (name, ser) in enumerate(bars):
+        r = (2 if show_cd else 1) + i
+        levels = sorted(ser.unique())
+        pal = {lv: (cmap.get(lv) if name == "group" else ANNOT_PAL[j % len(ANNOT_PAL)]) or "#999"
+               for j, lv in enumerate(levels)}
+        code = ser.map({lv: j for j, lv in enumerate(levels)}).values
+        k = max(len(levels), 1)
+        scale = []
+        for j, lv in enumerate(levels):
+            scale += [[j / k, pal[lv]], [(j + 1) / k, pal[lv]]]
+        fig.add_trace(go.Heatmap(z=[code], x=xs, y=[name], zmin=-0.5, zmax=k - 0.5, colorscale=scale,
+                                 showscale=False, customdata=[[f"{s} · {name}: {v}" for s, v in zip(sorder, ser)]],
+                                 hovertemplate="%{customdata}<extra></extra>"), row=r, col=2)
+        fig.update_yaxes(tickfont=dict(size=10), row=r, col=2)
+        fig.add_annotation(text="  ".join('<span style="color:%s">■</span> %s' % (pal[lv], lv) for lv in levels[:12]),
+                           xref="paper", yref="y%d" % (2 * r), x=1.005, xanchor="left", y=name, showarrow=False,
+                           font=dict(size=10))
+    # heatmap
+    text = [[f"{f} · {s}" for s in sorder] for f in forder]
+    fig.add_trace(go.Heatmap(z=Z.T.values, x=xs, y=np.arange(len(forder)), colorscale="RdBu_r", zmid=0, zmin=-3,
+                             zmax=3, colorbar=dict(title="z", thickness=10, len=min(0.6, 300 / max(height or 600, 300)), y=0, yanchor="bottom", x=1.0, xanchor="left", xpad=110 if rZ is not None else 10), text=text,
+                             hovertemplate="%{text}<br>z %{z:.2f}<extra></extra>"), row=hr, col=2)
+    lab = ylabels or {}
+    fig.update_yaxes(tickmode="array", tickvals=list(range(len(forder))), ticktext=[lab.get(f, f) for f in forder],
+                     tickfont=dict(size=9), autorange="reversed", side="right" if rZ is not None else "left",
+                     row=hr, col=2)
+    if rZ is not None:
+        dx, dy = _dendro_lines(rZ, "left")
+        fig.add_trace(go.Scatter(x=dx, y=dy, mode="lines", line=dict(color="#7b8794", width=0.8),
+                                 hoverinfo="skip", showlegend=False), row=hr, col=1)
+        fig.update_yaxes(range=[len(forder) - 0.5, -0.5], visible=False, row=hr, col=1)
+        fig.update_xaxes(visible=False, row=hr, col=1)
+    for r in range(1, hr + 1):
+        fig.update_xaxes(visible=False, range=[-0.5, len(sorder) - 0.5], row=r, col=2)
+        if r < hr:
+            fig.update_xaxes(visible=False, row=r, col=1)
+            fig.update_yaxes(visible=False, row=r, col=1)
+    if cols != "all":                                # group separators and labels
+        pos = 0
+        for lv, n in g.groupby(g, sort=False).size().items():
+            if pos:
+                fig.add_vline(x=pos - 0.5, line=dict(color="#1f2933", width=1.5), row=hr, col=2)
+            pos += n
+    style(fig, height or (220 + 14 * len(forder) + 22 * nb + (70 if show_cd else 0)), legend=False)
+    fig.update_layout(title=title, margin=dict(l=10 if rZ is not None else 80, r=230 if rZ is not None else 150,
+                                               t=40 if title else 20, b=20))
+    return fig

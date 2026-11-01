@@ -31,6 +31,8 @@ IMP3's `Stats/all_stats.tsv` is listed after them (prefix `imp:`).
 Choose a profile: Kraken2/Bracken per rank (with the Kraken2 database set in the IMP3 config, NCBI or GTDB) or mOTUs, for the metagenome or the metatranscriptome.
 
 - **Composition**: stacked bars of the top taxa, samples sorted by group and then by the most abundant taxon.
+  As a **heatmap**: z-scores of the most variable taxa (in ≥ 10 % of the samples), see
+  [clustered heatmaps](#clustered-heatmaps).
 - **Beta diversity**: Bray-Curtis PCoA of the relative abundances; PERMANOVA (499 permutations) by the grouping.
 - **Differences between groups**: Kruskal-Wallis (two groups: Mann-Whitney) per taxon present in ≥ 10 % of the
   samples, Benjamini-Hochberg q, group medians in %.
@@ -55,11 +57,26 @@ The MAGs of all samples (IMP3: several binners refined by MetaWrap, CheckM2 qual
 
 Reads per functional term from featureCounts on IMP3's Mantis annotation, relative within database and omic.
 
-- **Most variable terms**: z-scores of log10 relative abundance of the 40 most variable terms; term ids link to KEGG.
+- **Most variable terms**: heatmap of the 40 most variable terms, see [clustered heatmaps](#clustered-heatmaps);
+  term ids link to KEGG.
 - **Differences between groups**: as for taxonomy, at the chosen minimum prevalence; a link column opens KEGG / CAZy.
 - **One term**: metagenome and metatranscriptome share by group, and the expression ratio log2(mt / mg) per sample.
 
 ![Functions](img/functions.png)
+
+### Clustered heatmaps
+
+The heatmaps of the Functions page and of the taxonomy composition have four controls:
+
+| control | options |
+|---|---|
+| rows | by variance, or **clustered**: average linkage on correlation distance, optimal leaf order, dendrogram on the left; features that rise and fall together end up next to each other |
+| samples | by group then the top feature; **clustered within group** (the group blocks stay); **clustered (all samples)**, Euclidean distance, dendrogram on top: do the samples sort by group, by site or by something else? |
+| values | z of log10 relative abundance, or z of **CLR** (log-ratio to the sample's mean feature; the better basis for compositional data) |
+| colour bar | a second metadata column shown above the heatmap next to the group bar, e.g. site |
+
+z-scores are per feature over the selected samples, so the top-bar filter changes them. Hierarchical clustering always
+gives a tree, also from noise: check blocks against the group tests, the ordination and the cohort analysis.
 
 ## Search
 
