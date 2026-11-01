@@ -32,8 +32,8 @@ imp-explorer export --samples /path/to/samples.tsv --out /path/to/release_v0.1
 
 # optional: cohort statistics (group comparisons within blocks, adjusted models, report, app page)
 imp-explorer cohort --data /path/to/release_v0.1 --block site --model "group+site, group+site+sex+age"
-# ... or with the cohort settings of the study's sRNA-IMP config
-imp-explorer cohort --data /path/to/release_v0.1 --metadata /path/to/metadata.tsv --srna-config srna_pipeline.config.sh
+# ... or with the design in a settings file of the study (template: --write-config; an sRNA-IMP config works too)
+imp-explorer cohort --data /path/to/release_v0.1 --config study.cohort.yaml
 
 imp-explorer run --data /path/to/release_v0.1
 ```

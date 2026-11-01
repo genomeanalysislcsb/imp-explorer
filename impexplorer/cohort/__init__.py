@@ -2,7 +2,8 @@
 within blocks, covariate-adjusted models, MAGs, functions, metatranscriptome / metagenome ratios).
 
 Writes <out>/tables/*.tsv, <out>/stats/*.tsv, <out>/cohort.report.pdf + .html and cohort_* tables into the release
-for the app's Cohort page. Same statistics and settings as the sRNA-IMP cohort analysis (--srna-config).
+for the app's Cohort page. Same statistics and settings as the sRNA-IMP cohort analysis; a study settings file with --config (also the
+COHORT_* block of an sRNA-IMP config).
 """
 import json
 import os
@@ -56,11 +57,14 @@ def settings_dict(C, A, a):
             "metrics": {m: METRIC_LABEL.get(m, m) for m in C.metric_names},
             "permutations": a.permutations, "sig_q": a.sig_q, "prevalence": a.prevalence, "qc_drop": a.qc_drop,
             "samples": len(C.samples), "kept": len(C.kept), "excluded": C.excluded,
-            "from_srna_config": a.from_srna, "notes": C.log}
+            "config": os.path.abspath(a.config) if a.config else "", "from_config": a.from_config, "notes": C.log}
 
 
 def main(argv=None):
     a = settings.parse(argv)
+    if a.write_config:
+        sys.stderr.write("[cohort] settings template written to %s\n" % a.write_config)
+        return 0
     t0 = time.time()
     if a.term_names:
         load_term_names(a.term_names)

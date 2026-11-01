@@ -481,7 +481,8 @@ class Report:
                 ("groups", ", ".join(st["groups"])), ("reference", st["reference"]), ("block", st["block"] or "–"),
                 ("covariates", ", ".join(st["covariates"])), ("QC drop", st["qc_drop"]),
                 ("PERMANOVA permutations", st["permutations"]), ("prevalence filter", st["prevalence"]),
-                ("FDR threshold", st["sig_q"]), ("settings from sRNA config", ", ".join(st["from_srna_config"]) or "–")]
+                ("FDR threshold", st["sig_q"]), ("settings file", st.get("config") or "–"),
+                ("from the settings file", ", ".join(st.get("from_config", [])) or "–")]
         for s in st["models"]:
             rows.append((s["model"], s["formula"] + (" — " + s["note"] if s.get("note") else "")))
         for k, L in st["layers"].items():

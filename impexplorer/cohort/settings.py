@@ -1,5 +1,9 @@
-"""Settings of the cohort analysis: command line, optionally read from the cohort block of an sRNA-IMP config
-(srna_pipeline.config.sh: COHORT_GROUP_COL, COHORT_MODEL, ...), so that IMP3 and sRNA use the same design."""
+"""Settings of the cohort analysis: command line and an optional settings file (--config).
+
+The settings file is study-wide, not tied to sRNA: 'key: value' lines (e.g. written by --write-config) or bash
+assignments KEY="value" / KEY="${KEY-default}". Keys are the option names (group_col, block, model, ...) with or
+without the prefix COHORT_, in any case, so the COHORT_* block of an sRNA-IMP config works unchanged and one file can
+hold the design of a study for all its data types."""
 import argparse
 import os
 import re
@@ -14,6 +18,12 @@ SRNA_KEYS = {
     "COHORT_NAME": "name", "COHORT_MODEL": "model", "COHORT_MODEL_NOTES": "model_notes",
     "COHORT_QC_DROP": "qc_drop",
 }
+
+ALIASES = {"match_col": "block", "group": "group_col", "groups": "group_order", "title": "name"}
+CONFIG_KEYS = ("metadata", "id_col", "group_col", "group_order", "reference", "block", "covariates", "model",
+               "model_notes", "permutations", "sig_q", "outlier_z", "qc_drop", "term_names", "name", "layers",
+               "prevalence", "min_mg_pairs", "min_mt_pairs", "nmds")
+IGNORED = {"dir", "nmds_starts", "min_mirna_reads"}       # sRNA-specific COHORT_* keys without meaning here
 
 DEFAULT_LAYERS = ("kraken.genus.mg,kraken.genus.mt,kraken.species.mg,kraken.species.mt,"
                   "motus.species.mg,motus.species.mt,mag.genus.mg,mag.genus.mt,"
@@ -49,6 +59,65 @@ def read_shell_config(path):
     return out
 
 
+def norm_key(k):
+    k = k.strip().lower().replace("-", "_")
+    k = k[len("cohort_"):] if k.startswith("cohort_") else k
+    return ALIASES.get(k, k)
+
+
+def read_config(path):
+    """settings file -> {option: value} for the known options; unknown keys are reported, sRNA-only keys ignored"""
+    raw = read_shell_config(path)
+    for ln in open(path, encoding="utf-8", errors="replace"):
+        m = re.match(r"\s*([A-Za-z_][\w-]*)\s*:\s*(.*?)\s*$", ln)
+        if not m or ln.lstrip().startswith("#"):
+            continue
+        val = m.group(2)
+        if val.startswith(("'", '"')):
+            q = val[0]
+            val = val[1:val.index(q, 1)] if q in val[1:] else val[1:]
+        else:
+            val = re.sub(r"\s+#.*$", "", val)
+        raw[m.group(1)] = val
+    out, unknown = {}, []
+    for k, v in raw.items():
+        nk = norm_key(k)
+        if nk in CONFIG_KEYS:
+            if v != "" and nk not in out:
+                out[nk] = v
+        elif k.upper().startswith("COHORT_") or ":" in k or k.islower():
+            if nk not in IGNORED:
+                unknown.append(k)
+    return out, unknown
+
+
+TEMPLATE = """# imp-explorer cohort settings (imp-explorer cohort --config this_file)
+# key: value; empty = default. Keys also work as COHORT_<KEY>="..." (bash), e.g. in an sRNA-IMP config.
+name:                     # report title  [study name of the release]
+metadata:                 # extra metadata TSV/CSV merged on the sample id
+id_col:                   # id column of the metadata  [first column]
+group_col: group          # group column
+group_order:              # e.g. control,case_a,case_b
+reference:                # reference group  [first group]
+block:                    # block column, e.g. site: groups compared within blocks
+covariates:               # covariates checked for balance  [all metadata columns]
+# models: comma-separated, terms joined by +, first term = term of interest; 'terms | col=v1/v2' = subset
+#   e.g. group+site, group+site+sex+age, dose+sex+age | group=case_a    [empty: group(+block)]
+model: {model}
+model_notes:              # question per model, e.g. M2=adjusted for sex and age; M3=dose response
+permutations: 999
+sig_q: 0.1
+outlier_z: 4
+qc_drop: FAIL             # FAIL | WARN | none
+prevalence: 0.1
+min_mg_pairs: 1000000
+min_mt_pairs: 1000000
+term_names:               # term<TAB>name TSVs or KEGG flat files for readable labels
+nmds: kraken.genus.mg,kegg_pathway.mg
+layers: {layers}
+"""
+
+
 def parser():
     ap = argparse.ArgumentParser(
         prog="imp-explorer cohort",
@@ -56,10 +125,13 @@ def parser():
                     "within blocks (e.g. site), covariate-adjusted models (OLS on CLR, HC3), MAGs, functions and "
                     "metatranscriptome / metagenome ratios. Writes TSVs, a PDF + HTML report and cohort tables "
                     "for the app.")
-    ap.add_argument("--data", required=True, help="release directory (imp-explorer export)")
+    ap.add_argument("--data", default="", help="release directory (imp-explorer export)")
     ap.add_argument("--out", default="", help="output directory  [<release>/cohort]")
-    ap.add_argument("--srna-config", default="", help="read the COHORT_* settings of an sRNA-IMP config "
-                    "(srna_pipeline.config.sh); options given here override them")
+    ap.add_argument("--config", "--srna-config", dest="config", default="",
+                    help="settings file of the study: 'key: value' lines (see --write-config) or bash COHORT_* "
+                         "assignments, e.g. the cohort block of an sRNA-IMP config; command-line options override it")
+    ap.add_argument("--write-config", default="", metavar="FILE",
+                    help="write a commented settings template (with the options given) and exit")
     ap.add_argument("--metadata", default=None, help="extra metadata TSV/CSV merged on the sample id "
                     "(columns override those of the release)")
     ap.add_argument("--id-col", default=None, help="sample id column of --metadata  [first column]")
@@ -73,17 +145,17 @@ def parser():
                     "= term of interest; 'terms | column=v1/v2' fits on a subset, e.g. "
                     "'group+site, group+site+sex+age, dose+sex+age | group=case_a'  [group(+block)]")
     ap.add_argument("--model-notes", default=None, help="question per model, ';'-separated: 'M3=dose response'")
-    ap.add_argument("--layers", default=DEFAULT_LAYERS, help="feature sets to analyse [%(default)s]")
+    ap.add_argument("--layers", default=None, help="feature sets to analyse [%s]" % DEFAULT_LAYERS)
     ap.add_argument("--permutations", type=int, default=None, help="PERMANOVA permutations  [999]")
     ap.add_argument("--sig-q", type=float, default=None, help="FDR threshold for highlights  [0.1]")
     ap.add_argument("--outlier-z", type=float, default=None, help="robust z of a QC metric that gives WARN  [4]")
-    ap.add_argument("--min-mg-pairs", type=float, default=1e6, help="FAIL below this many trimmed mg read pairs")
-    ap.add_argument("--min-mt-pairs", type=float, default=1e6, help="mt layers: sample left out below this many "
+    ap.add_argument("--min-mg-pairs", type=float, default=None, help="FAIL below this many trimmed mg read pairs")
+    ap.add_argument("--min-mt-pairs", type=float, default=None, help="mt layers: sample left out below this many "
                     "trimmed mt read pairs (WARN)")
     ap.add_argument("--qc-drop", default=None, choices=("FAIL", "WARN", "none"), help="samples left out  [FAIL]")
-    ap.add_argument("--prevalence", type=float, default=0.1, help="features with >= 10 reads in at least this share "
+    ap.add_argument("--prevalence", type=float, default=None, help="features with >= 10 reads in at least this share "
                     "of samples are tested  [0.1]")
-    ap.add_argument("--nmds", default="kraken.genus.mg,kegg_pathway.mg", help="layers with an NMDS ('' = none)")
+    ap.add_argument("--nmds", default=None, help="layers with an NMDS ('' = none)")
     ap.add_argument("--term-names", default=None, help="TSV(s) term<TAB>name or KEGG flat files for readable labels")
     ap.add_argument("--name", default=None, help="title of the report  [study name]")
     ap.add_argument("--no-release-tables", action="store_true", help="do not write cohort_* tables into the release")
@@ -94,24 +166,50 @@ def parser():
 
 DEFAULTS = {"metadata": "", "id_col": "", "group_col": "group", "group_order": "", "reference": "", "block": "",
             "covariates": "", "model": "", "model_notes": "", "permutations": 999, "sig_q": 0.1, "outlier_z": 4.0,
-            "qc_drop": "FAIL", "term_names": "", "name": ""}
-TYPES = {"permutations": int, "sig_q": float, "outlier_z": float}
+            "qc_drop": "FAIL", "term_names": "", "name": "", "layers": DEFAULT_LAYERS, "prevalence": 0.1,
+            "min_mg_pairs": 1e6, "min_mt_pairs": 1e6, "nmds": "kraken.genus.mg,kegg_pathway.mg"}
+TYPES = {"permutations": int, "sig_q": float, "outlier_z": float, "prevalence": float, "min_mg_pairs": float,
+         "min_mt_pairs": float}
 
 
 def parse(argv=None):
-    a = parser().parse_args(argv)
-    cfg = {}
-    if a.srna_config:
-        raw = read_shell_config(a.srna_config)
-        for k, opt in SRNA_KEYS.items():
-            if k in raw and raw[k] != "" and opt not in cfg:
-                cfg[opt] = raw[k]
+    ap = parser()
+    a = ap.parse_args(argv)
+    cfg, unknown = read_config(a.config) if a.config else ({}, [])
+    if unknown:
+        import sys
+        sys.stderr.write("[cohort] %s: unknown settings ignored: %s\n" % (a.config, ", ".join(sorted(unknown))))
     for k, d in DEFAULTS.items():
         v = getattr(a, k)
         if v is None:
             v = cfg.get(k, d)
             v = TYPES[k](v) if k in TYPES and v != "" else v
         setattr(a, k, v)
-    a.from_srna = sorted(cfg) if a.srna_config else []
+    if a.qc_drop not in ("FAIL", "WARN", "none"):
+        ap.error("qc_drop must be FAIL, WARN or none (got %r)" % a.qc_drop)
+    a.from_config = sorted(cfg)
+    if a.write_config:
+        write_template(a, a.write_config)
+        return a
+    if not a.data:
+        ap.error("--data is required")
     a.out = a.out or os.path.join(a.data, "cohort")
     return a
+
+
+def write_template(a, path):
+    """settings template with the current values (defaults, --config, command line)"""
+    txt = TEMPLATE.format(model=a.model or "", layers=a.layers)
+    lines = []
+    for ln in txt.splitlines():
+        m = re.match(r"([a-z_]+):(\s*)(.*)$", ln)
+        if m and m.group(1) in CONFIG_KEYS and m.group(1) not in ("model", "layers"):
+            v = getattr(a, m.group(1))
+            v = "" if v is None else (("%d" % v if float(v).is_integer() else "%g" % v) if isinstance(v, float)
+                                       else str(v))
+            comment = m.group(3).split("#", 1)[1] if "#" in m.group(3) else ""
+            ln = "%s: %s" % (m.group(1), v)
+            ln = ln.ljust(26) + ("# " + comment.strip() if comment else "")
+        lines.append(ln.rstrip())
+    with open(path, "w") as fh:
+        fh.write("\n".join(lines) + "\n")

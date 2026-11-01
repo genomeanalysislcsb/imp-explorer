@@ -158,19 +158,36 @@ def test_samples_sheet_relative_paths(tmp_path):
 
 
 # ----------------------------------------------------------------------------- cohort analysis
-def test_srna_config_settings(tmp_path):
+def test_config_settings(tmp_path):
+    """one settings file per study: 'key: value' (written by --write-config) or bash COHORT_* (sRNA-IMP config)"""
     from impexplorer.cohort import settings
-    cfg = tmp_path / "srna.config.sh"
-    cfg.write_text('COHORT_GROUP_COL="${COHORT_GROUP_COL-group}"   # comment\n'
-                   'COHORT_GROUP_ORDER="${COHORT_GROUP_ORDER-control,case_a,case_b}"\n'
-                   'COHORT_BLOCK="${COHORT_BLOCK-${COHORT_MATCH_COL-site}}"\n'
-                   'COHORT_PERMUTATIONS="${COHORT_PERMUTATIONS-99}"\n'
-                   'COHORT_MODEL="${COHORT_MODEL-group+site, age+sex | group=case_a}"\n'
-                   'COHORT_MODEL_NOTES="${COHORT_MODEL_NOTES-M2=age in case_a}"\n')
-    a = settings.parse(["--data", str(tmp_path), "--srna-config", str(cfg), "--permutations", "19"])
+    sh = tmp_path / "srna.config.sh"
+    sh.write_text('THREADS=8\nCOHORT_GROUP_COL="${COHORT_GROUP_COL-group}"   # comment\n'
+                  'COHORT_GROUP_ORDER="${COHORT_GROUP_ORDER-control,case_a,case_b}"\n'
+                  'COHORT_BLOCK="${COHORT_BLOCK-${COHORT_MATCH_COL-site}}"\n'
+                  'COHORT_PERMUTATIONS="${COHORT_PERMUTATIONS-99}"\nCOHORT_MIN_MIRNA_READS=50\n'
+                  'COHORT_MODEL="${COHORT_MODEL-group+site, age+sex | group=case_a}"\n'
+                  'COHORT_MODEL_NOTES="${COHORT_MODEL_NOTES-M2=age in case_a}"\n')
+    a = settings.parse(["--data", str(tmp_path), "--config", str(sh), "--permutations", "19"])
     assert a.group_order == "control,case_a,case_b" and a.block == "site"
     assert a.model == "group+site, age+sex | group=case_a" and a.model_notes == "M2=age in case_a"
-    assert a.permutations == 19                     # the command line wins over the config
+    assert a.permutations == 19                     # the command line wins over the file
+    a = settings.parse(["--data", str(tmp_path), "--srna-config", str(sh)])      # old option name still works
+    assert a.permutations == 99
+    # template with the values given, read back unchanged
+    t = tmp_path / "cohort.yaml"
+    settings.parse(["--write-config", str(t), "--block", "centre", "--model", "group+centre, group+centre+age",
+                    "--prevalence", "0.2"])
+    b = settings.parse(["--data", str(tmp_path), "--config", str(t)])
+    assert b.block == "centre" and b.model == "group+centre, group+centre+age" and b.prevalence == 0.2
+    assert b.group_col == "group" and b.permutations == 999 and b.qc_drop == "FAIL"
+    # hand-written file, mixed key styles
+    y = tmp_path / "study.yaml"
+    y.write_text("# study design\nGroup_Col: diagnosis\ncohort_reference: HC\nblock: 'site'   # quoted\n"
+                 "model: diagnosis+site, diagnosis+site+sex  # two models\nsig-q: 0.05\n")
+    c = settings.parse(["--data", str(tmp_path), "--config", str(y)])
+    assert (c.group_col, c.reference, c.block, c.sig_q) == ("diagnosis", "HC", "site", 0.05)
+    assert c.model == "diagnosis+site, diagnosis+site+sex"
 
 
 def test_permanova_same_as_pairwise_loop():
