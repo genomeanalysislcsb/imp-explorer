@@ -116,14 +116,14 @@ def grid(id_, df, height=380, number_cols=(), page_size=None, fit=False):
     for c in df.columns:
         d = {"field": c, "headerName": c, "filter": True, "sortable": True, "resizable": True}
         if c in number_cols or pd.api.types.is_float_dtype(df[c]):
-            d["valueFormatter"] = {"function": "d3.format('.3~g')(params.value)"}
+            d["valueFormatter"] = {"function": "params.value == null ? '' : d3.format('.3~g')(params.value)"}
             d["filter"] = "agNumberColumnFilter"
         if c == "link":
             d.update(cellRenderer="markdown", linkTarget="_blank", filter=False, sortable=False, width=90,
                      minWidth=90)
         if fit:
             d.setdefault("minWidth", 95)
-        if fit and c in ("name", "taxon", "term", "kind"):
+        if fit and c in ("name", "taxon", "term", "kind", "feature", "reasons", "comparison"):
             d["flex"] = 2
             d["minWidth"] = 160
         cols.append(d)

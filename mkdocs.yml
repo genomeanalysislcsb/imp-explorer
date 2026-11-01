@@ -28,6 +28,7 @@ nav:
       - Installation: installation.md
       - Export IMP3 results: export.md
       - Run the app: running.md
+      - Cohort analysis: cohort.md
   - The app: app.md
   - Reference:
       - Release tables (data model): data-model.md

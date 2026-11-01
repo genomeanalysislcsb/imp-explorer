@@ -12,5 +12,6 @@ dependencies:
   - dash-ag-grid>=31
   - plotly>=5.22
   - scipy
+  - matplotlib-base     # cohort report
   - pytest
   - pip

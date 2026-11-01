@@ -8,6 +8,9 @@ import pandas as pd
 from ..release import read_manifest, table_path
 
 CORE_TABLES = ("samples", "qc", "taxonomy", "bins", "bin_abundance", "functions")
+COHORT_TABLES = ("cohort_models", "cohort_models_overview", "cohort_tests", "cohort_metric_tests", "cohort_permanova",
+                 "cohort_dispersion", "cohort_ordination", "cohort_samples", "cohort_covariates", "cohort_qc",
+                 "cohort_mag_prevalence")     # written by 'imp-explorer cohort'; optional
 HIDDEN_COLS = {"imp_dir"}
 
 
@@ -18,7 +21,7 @@ class Data:
         self.study = self.manifest.get("study") or os.path.basename(self.release)
         self._local = threading.local()
         self.tables = {}
-        for name in tuple(CORE_TABLES) + tuple(extra_tables):
+        for name in tuple(CORE_TABLES) + COHORT_TABLES + tuple(extra_tables):
             p = table_path(self.release, name)
             if p:
                 self.tables[name] = p

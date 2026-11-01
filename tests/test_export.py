@@ -154,3 +154,90 @@ def test_samples_sheet_relative_paths(tmp_path):
     assert export.main(["--samples", str(sheet), "--out", str(out), "--threads", "1", "--format", "tsv"]) == 0
     s = read_table(str(out), "samples")
     assert list(s["imp_dir"]) == ["imp/S01", "imp/S02", "imp/S03"] and s["has_mt"].all()
+
+
+# ----------------------------------------------------------------------------- cohort analysis
+def test_srna_config_settings(tmp_path):
+    from impexplorer.cohort import settings
+    cfg = tmp_path / "srna.config.sh"
+    cfg.write_text('COHORT_GROUP_COL="${COHORT_GROUP_COL-group}"   # comment\n'
+                   'COHORT_GROUP_ORDER="${COHORT_GROUP_ORDER-control,case_a,case_b}"\n'
+                   'COHORT_BLOCK="${COHORT_BLOCK-${COHORT_MATCH_COL-site}}"\n'
+                   'COHORT_PERMUTATIONS="${COHORT_PERMUTATIONS-99}"\n'
+                   'COHORT_MODEL="${COHORT_MODEL-group+site, age+sex | group=case_a}"\n'
+                   'COHORT_MODEL_NOTES="${COHORT_MODEL_NOTES-M2=age in case_a}"\n')
+    a = settings.parse(["--data", str(tmp_path), "--srna-config", str(cfg), "--permutations", "19"])
+    assert a.group_order == "control,case_a,case_b" and a.block == "site"
+    assert a.model == "group+site, age+sex | group=case_a" and a.model_notes == "M2=age in case_a"
+    assert a.permutations == 19                     # the command line wins over the config
+
+
+def test_permanova_same_as_pairwise_loop():
+    import numpy as np
+    from impexplorer.cohort.stats import bray_curtis, permanova
+    rng = np.random.default_rng(2)
+    X = rng.random((24, 8))
+    X[:12, 0] += 2                                  # a real difference
+    D = bray_curtis(X)
+    lab = np.array(["a"] * 12 + ["b"] * 12)
+    F, r2, p = permanova(D, lab, 199)
+    # reference: pairwise sums of squares (Anderson 2001)
+    n, D2 = len(lab), D ** 2
+    sst = D2[np.triu_indices(n, 1)].sum() / n
+    ssw = sum(D2[np.ix_(lab == g, lab == g)][np.triu_indices(12, 1)].sum() / 12 for g in "ab")
+    assert abs(F - (sst - ssw) / (ssw / (n - 2))) < 1e-9 and abs(r2 - (sst - ssw) / sst) < 1e-12 and p < 0.05
+
+
+def test_ols_hc3_estimates():
+    import numpy as np
+    from impexplorer.cohort.stats import ols_hc3
+    rng = np.random.default_rng(1)
+    X = np.column_stack([np.ones(50), rng.normal(size=50)])
+    Y = (X @ np.array([1.0, 2.0]))[:, None] + rng.normal(scale=0.1, size=(50, 1))
+    B, SE, T, P, df = ols_hc3(X, Y)
+    assert np.allclose(B[:, 0], np.linalg.lstsq(X, Y, rcond=None)[0][:, 0]) and df == 48 and P[1, 0] < 1e-10
+
+
+def test_cohort_on_fixture(tmp_path):
+    """imp-explorer cohort on a 30-sample release: tables, report, cohort tables in the release, app page"""
+    from impexplorer import cohort
+    root = make_fixture.main(str(tmp_path), n=30)
+    out = tmp_path / "release"
+    export.main(["--imp-root", root, "--metadata", str(tmp_path / "metadata.tsv"), "--out", str(out),
+                 "--threads", "2"])
+    try:
+        import matplotlib  # noqa: F401
+        report = []
+    except ImportError:
+        report = ["--no-report"]
+    rc = cohort.main(["--data", str(out), "--block", "site", "--group-order", "control,case_a,case_b",
+                      "--model", "group+site, group+site+sex+age, age+sex | group=case_a",
+                      "--model-notes", "M3=age within case_a", "--permutations", "49", "--nmds", "kraken.genus.mg",
+                      "--layers", "kraken.genus.mg,kraken.genus.mt,mag.genus.mg,mag.genus.mt,kegg_module.mg,"
+                      "kegg_module.mt,ratio.kegg_module,ratio.mag.genus"] + report)
+    assert rc == 0
+    c = out / "cohort"
+    mo = pd.read_csv(c / "stats" / "cohort.models.tsv", sep="\t")
+    assert set(mo["model"]) >= {"M1", "M2"} and mo["focus"].any()
+    assert {"group: case_a vs control", "group: case_b vs control"} <= set(mo["term"])
+    ov = pd.read_csv(c / "stats" / "cohort.models_overview.tsv", sep="\t")
+    assert (ov[ov["model"] == "M3"]["features"].fillna(0) == 0).all()      # 10 case_a samples: too few, skipped
+    ft = pd.read_csv(c / "stats" / "cohort.feature_tests.tsv", sep="\t")
+    assert {"case_a vs control (site_1, site_2)", "control: site_2 vs site_1"} <= set(ft["comparison"])
+    pm = pd.read_csv(c / "stats" / "cohort.permanova.tsv", sep="\t")
+    assert "groups | site (partial)" in set(pm["comparison"])
+    assert (c / "tables" / "cohort.ratio.kegg_module.log2ratio.tsv").exists()
+    if not report:
+        assert (c / "cohort.report.pdf").stat().st_size > 10000 and (c / "cohort.report.html").exists()
+    man = read_manifest(str(out))
+    assert man["cohort"]["reference"] == "control" and man["cohort"]["models"][2]["note"] == "age within case_a"
+    assert len(read_table(str(out), "cohort_models")) == len(mo)
+    try:
+        import dash  # noqa: F401
+    except ImportError:
+        return
+    from impexplorer.app import create_app
+    app = create_app(str(out))
+    assert "Cohort" in [p.name for p in app._imp_pages]
+    page = next(p for p in app._imp_pages if p.name == "Cohort")
+    assert page.layout(app._imp_data) is not None

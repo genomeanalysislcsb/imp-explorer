@@ -67,8 +67,25 @@ Type part of a name: a taxon at any rank (Kraken2, mOTUs, GTDB names of the MAGs
 pathway, CAZyme, EC). Picking a hit plots it in every layer where it occurs, side by side by group, e.g. a genus in
 Kraken2 mg and mt, mOTUs mg and mt, and the MAGs mg and mt.
 
+## Cohort
+
+Shown when the release contains the results of [`imp-explorer cohort`](cohort.md). The results are fixed: the global
+'group by' and filter controls do not apply.
+
+- **Group comparisons**: per layer and comparison (each group vs the reference within shared blocks, the block
+  contrast in the reference group, Kruskal-Wallis across groups), a volcano and the feature table. Clicking a row plots
+  the feature by group and block.
+- **Adjusted models**: per model (with its question), layer and term (★ = term of interest), a volcano of the
+  estimates and the feature table, with design notes. The plot shows the raw values; the model itself uses CLR and the
+  covariates.
+- **Beta diversity**: PCoA or NMDS of a layer by group and block, PERMANOVA and dispersion.
+- **QC and covariates**: covariate balance, metric tests, any metric by group and block, QC flags.
+
+![Cohort](img/cohort.png)
+
 ## Statistics: what they are and are not
 
-The tests are exploratory: one non-parametric test per feature with BH correction, no covariates. They are meant to
-find candidates and check data, not to replace adjusted models (e.g. the sRNA-IMP cohort analysis or MaAsLin-type
-models). Relative abundances are compositional; group differences in one taxon can come from changes in others.
+The tests of the other pages are exploratory: one non-parametric test per feature with BH correction, no covariates,
+on the samples and grouping chosen in the top bar. Covariate-adjusted models and comparisons within blocks come from
+the [cohort analysis](cohort.md). Relative abundances are compositional; group differences in one taxon can come from
+changes in others.

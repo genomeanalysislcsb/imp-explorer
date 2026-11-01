@@ -34,3 +34,8 @@ h2 { margin:6px 0 4px; font-size:20px; }
 .linkbox { display:flex; align-items:flex-end; padding-bottom:8px; }
 .extlink { color:var(--accent); text-decoration:none; font-size:13px; }
 .extlink:hover { text-decoration:underline; }
+
+/* cohort page tabs */
+.tabs { margin: 6px 0 14px; }
+.tab { padding: 8px 14px !important; font-weight: 600; color: #52606d; }
+.tab--selected { color: #2a6f97 !important; border-top: 3px solid #2a6f97 !important; }

@@ -9,11 +9,14 @@ Interactive exploration of [IMP3](https://gitlab.com/uniluxembourg/lcsb/systems-
 (metagenomics + metatranscriptomics), with sRNA-IMP results as an optional layer. Stand-alone tool, and the core of
 study portals that add their own layers and pages.
 
-Two steps:
+Two steps, plus an optional cohort analysis:
 
 1. **export** (on the HPC, needs only pandas): IMP3 sample directories → one *release* directory of tables
    (Parquet with pyarrow, else TSV.gz) + `manifest.json`.
 2. **run** (laptop / VM / container): the Dash app on a release directory.
+3. **cohort** (optional, HPC or laptop): cohort statistics of the release — QC and covariates, diversity, group
+   comparisons within blocks (site), covariate-adjusted models (OLS on CLR, HC3), MAGs, mt/mg ratios — as TSVs, a
+   PDF/HTML report and tables for the app's Cohort page. Same statistics and settings as the sRNA-IMP cohort analysis.
 
 ```bash
 micromamba create -y -p ./env -f environment.yml && micromamba activate ./env
@@ -26,6 +29,11 @@ imp-explorer export --imp-root /path/to/IMP3_outputs --metadata /path/to/metadat
 imp-explorer export --imp-root /path/to/IMP3_outputs --id-regex 'run_(\w+)' --id-case upper ...
 # or an explicit sheet: sample_id, imp_dir, (metadata columns ...)
 imp-explorer export --samples /path/to/samples.tsv --out /path/to/release_v0.1
+
+# optional: cohort statistics (group comparisons within blocks, adjusted models, report, app page)
+imp-explorer cohort --data /path/to/release_v0.1 --block site --model "group+site, group+site+sex+age"
+# ... or with the cohort settings of the study's sRNA-IMP config
+imp-explorer cohort --data /path/to/release_v0.1 --metadata /path/to/metadata.tsv --srna-config srna_pipeline.config.sh
 
 imp-explorer run --data /path/to/release_v0.1
 ```
@@ -43,6 +51,7 @@ start it on a node and open it through an SSH tunnel (`ssh -L 8050:<node>:8050 <
 | MAGs | CheckM2 quality, GTDB taxonomy of the MAGs, abundance (mg) and activity (mt) of a taxon's MAGs by group, log2(mt/mg) per MAG, MAG catalogue |
 | Functions | KEGG KO / module / pathway, CAZy, EC per omic: most variable terms, group tests, one term by group, expression ratio mt/mg |
 | Search | one name across all layers (Kraken2, mOTUs, MAGs, functions) by group |
+| Cohort | results of `imp-explorer cohort`: group comparisons within blocks, adjusted models (volcano + table per model, layer, term), beta diversity, QC and covariates |
 
 The top bar sets the grouping variable (any metadata column with 2–12 values) and a sample filter for all pages, e.g.
 `site = site_1` to compare groups within one site.

@@ -65,6 +65,15 @@ ranks `domain` … `species`, `classification` (full GTDB string), `closest_geno
 `sample_id`, `omic`, `db`, `feature`, `reads` (featureCounts with `-M --fraction`, paired + single reads). The app
 normalises within (sample, omic, db).
 
+## Cohort tables
+
+Written into the release by [`imp-explorer cohort`](cohort.md) (optional; the app's Cohort page needs them):
+`cohort_samples` (metrics, group, block per sample), `cohort_qc`, `cohort_covariates`, `cohort_metric_tests`,
+`cohort_tests` (layer, feature, comparison, kind, n_a, n_b, median_a, median_b, effect, p, q), `cohort_models` (model,
+layer, feature, n, term, focus, estimate, se, t, p, q), `cohort_models_overview`, `cohort_permanova`,
+`cohort_dispersion`, `cohort_ordination` and `cohort_mag_prevalence`. The settings are stored in the manifest under
+`cohort`.
+
 ## manifest.json
 
 ```json
