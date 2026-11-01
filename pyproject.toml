@@ -12,7 +12,7 @@ dependencies = ["pandas>=1.5", "numpy"]
 [project.optional-dependencies]
 parquet = ["pyarrow>=14"]
 cohort = ["matplotlib", "scipy"]
-app = ["dash>=2.17,<3", "dash-ag-grid>=31", "plotly>=5.22", "duckdb>=1.0", "pyarrow>=14", "scipy"]
+app = ["dash>=2.17,<3", "dash-ag-grid>=31", "plotly>=5.22,<6", "duckdb>=1.0", "pyarrow>=14", "scipy"]
 
 [project.scripts]
 imp-explorer = "impexplorer.cli:main"

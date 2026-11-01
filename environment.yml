@@ -10,7 +10,7 @@ dependencies:
   - python-duckdb>=1.0
   - dash>=2.17,<3
   - dash-ag-grid>=31
-  - plotly>=5.22
+  - plotly>=5.22,<6     # dash 2.x ships plotly.js 2; plotly.py >= 6 sends typed arrays it can drop
   - scipy
   - matplotlib-base     # cohort report
   - pytest
