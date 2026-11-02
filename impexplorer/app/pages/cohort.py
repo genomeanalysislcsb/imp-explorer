@@ -207,12 +207,19 @@ def tab_models(data):
                 "FROM all_models_overview GROUP BY 1, 2")
     ov["k"] = ov["model"].str.extract(r"(\d+)")[0].astype(float)
     ov = ov.sort_values(["k", "has_srna"])
-    src = lambda r: "IMP3 + sRNA" if r.has_srna and r.has_imp else ("sRNA" if r.has_srna else "IMP3")
-    opts = [{"label": "%s: %s%s  [%s]" % (r.model, r.formula, " — " + r.note if r.note not in (None, "", "nan")
-                                          else "", src(r)),
-             "value": "%s|%s" % (r.model, r.formula)} for r in ov.itertuples()]
+    src = lambda r: "IMP3+sRNA" if r.has_srna and r.has_imp else ("sRNA" if r.has_srna else "IMP3")
+
+    def short(x, n=58):
+        x = str(x)
+        return x if len(x) <= n else x[:n - 1] + "…"
+    # one line per model: its question (or formula) and the data types; the full formula as tooltip and below
+    opts = [{"label": "%s · %s · %s" % (r.model, short(r.note if r.note not in (None, "", "nan") else r.formula),
+                                        src(r)),
+             "title": r.formula, "value": "%s|%s" % (r.model, r.formula)} for r in ov.itertuples()]
     return html.Div([
-        html.Div([control("model", dd("co-m-model", opts, opts[0]["value"] if opts else None)),
+        html.Div([html.Div(control("model", dcc.Dropdown(id="co-m-model", options=opts, clearable=False,
+                                                         value=opts[0]["value"] if opts else None, optionHeight=34,
+                                                         maxHeight=420)), style={"minWidth": "480px"}),
                   control("layer", dd("co-m-layer", [], None)),
                   control("term", dd("co-m-term", [], None))], className="controls"),
         html.Div(id="co-m-info", className="hint"),
@@ -338,7 +345,9 @@ def register(app, data):
         opts = [{"label": ("★ " if f else "") + x, "value": x} for x, f in zip(t["term"], t["focus"])]
         info = data.q("SELECT info FROM all_models_overview WHERE model=? AND layer=?", [model, layer])
         txt = info["info"].iloc[0] if len(info) and info["info"].iloc[0] not in (None, "nan", "") else None
-        return opts, (t["term"].iloc[0] if len(t) else None), ("design: " + txt) if txt else None
+        form = key.split("|", 1)[1]
+        return opts, (t["term"].iloc[0] if len(t) else None), html.Span(
+            ["formula: ", html.Code(form)] + (["  ·  design: " + txt] if txt else []))
 
     @app.callback(Output("co-m-volcano", "figure"), Output("co-m-table", "children"),
                   Input("co-m-model", "value"), Input("co-m-layer", "value"), Input("co-m-term", "value"))
