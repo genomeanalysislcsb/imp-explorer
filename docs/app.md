@@ -84,9 +84,15 @@ Type part of a name: a taxon at any rank (Kraken2, mOTUs, GTDB names of the MAGs
 pathway, CAZyme, EC). Picking a hit plots it in every layer where it occurs, side by side by group, e.g. a genus in
 Kraken2 mg and mt, mOTUs mg and mt, and the MAGs mg and mt.
 
+## sRNA
+
+Shown when the release contains sRNA results ([`imp-explorer srna`](srna.md)): composition of any sRNA feature set,
+library QC, RNA classes by group, and one feature next to the metagenome and metatranscriptome of the same samples.
+
 ## Cohort
 
-Shown when the release contains the results of [`imp-explorer cohort`](cohort.md). The results are fixed: the global
+Shown when the release contains the results of [`imp-explorer cohort`](cohort.md) and / or of the sRNA-IMP cohort
+analysis ([`imp-explorer srna`](srna.md)); the sRNA layers appear next to the IMP3 layers. The results are fixed: the global
 'group by' and filter controls do not apply.
 
 - **Group comparisons**: per layer and comparison (each group vs the reference within shared blocks, the block

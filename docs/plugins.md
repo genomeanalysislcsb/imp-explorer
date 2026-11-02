@@ -26,23 +26,24 @@ from impexplorer.app.pages._common import box_by_group, selection
 
 
 def layout(data):
-    return html.Div([html.H2("Small RNA"), card("miRNA-like reads by group", graph("srna-box"))])
+    return html.Div([html.H2("Metabolomics"), card("Butyrate by group", graph("metab-box"))])
 
 
 def register(app, data):
-    @app.callback(Output("srna-box", "figure"),
+    @app.callback(Output("metab-box", "figure"),
                   Input(GLOBAL[0], "value"), Input(GLOBAL[1], "value"), Input(GLOBAL[2], "value"))
     def _box(group, fcol, fval):
         s, g, cmap = selection(data, group, fcol, fval)
-        d = data.q("SELECT sample_id, value FROM srna_qc WHERE metric = 'miRNA_like_fraction'")
-        return box_by_group(d.set_index("sample_id")["value"], g, cmap, "share of non-human reads")
+        d = data.q("SELECT sample_id, value FROM metabolites WHERE compound = 'butyrate'")
+        return box_by_group(d.set_index("sample_id")["value"], g, cmap, "butyrate (µmol/g)")
 
 
-PAGES = [Page(path="/srna", name="sRNA", order=50, layout=layout, register=register, requires=("srna_qc",))]
+PAGES = [Page(path="/metabolomics", name="Metabolomics", order=50, layout=layout, register=register,
+              requires=("metabolites",))]
 ```
 
 ```bash
-imp-explorer run --data release_v0.1 --plugin my_portal.pages --table srna_qc
+imp-explorer run --data release_v0.1 --plugin my_portal.pages --table metabolites
 ```
 
 An installed package can also register pages through the entry-point group `impexplorer.pages`:
@@ -61,6 +62,6 @@ the same name.
 ## Example: a multi-omics study portal
 
 A study with more data layers than IMP3 covers uses the IMP explorer for metagenomics and metatranscriptomics and
-adds, as plug-ins: small-RNA results (e.g. from [sRNA-IMP](https://github.com/genomeanalysislcsb/sRNA-IMP)),
-metaproteomics, metabolomics or host data as extra tables with the same keys, a cross-layer feature search, and
-pages for the figures of its paper.
+adds, as plug-ins: metaproteomics, metabolomics or host data as extra tables with the same keys, a cross-layer feature search, and
+pages for the figures of its paper. Small-RNA results of [sRNA-IMP](https://github.com/genomeanalysislcsb/sRNA-IMP)
+are built in ([sRNA layer](srna.md)).

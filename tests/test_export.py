@@ -283,3 +283,118 @@ def test_clustered_heatmap_modes():
                                         annot=site)
                 heat = [t for t in fig.data if t.type == "heatmap"][-1]
                 assert np.asarray(heat.z).shape == (20, 24)
+
+
+# ----------------------------------------------------------------------------- sRNA layer
+def make_srna_cohort(root, samples):
+    """minimal Cohort folder as written by sRNA-IMP (srna_cohort.py), two fractions"""
+    import numpy as np
+    rng = np.random.default_rng(5)
+    t, s = os.path.join(root, "tables"), os.path.join(root, "stats")
+    os.makedirs(t)
+    os.makedirs(s)
+    groups = ["control", "case_a", "case_b"]
+    g = {x: groups[i % 3] for i, x in enumerate(samples)}
+    site = {x: "site_%d" % (1 + (i // 3) % 2) for i, x in enumerate(samples)}
+    rows = []
+    for ty in ("sRNA-Ext", "sRNA-Int"):
+        for x in samples:
+            rows.append([x, ty, g[x], "PASS", "yes", site[x], "F", 60, int(rng.integers(5e6, 9e6)),
+                         float(rng.random() * 0.1)])
+    pd.DataFrame(rows, columns=["sample", "type", "group", "qc", "in_statistics", "site", "sex", "age",
+                                "raw_reads", "human_fraction"]).to_csv(os.path.join(t, "cohort.sample_stats.tsv"),
+                                                                       sep="\t", index=False)
+    pd.DataFrame({"sample": samples, "group": [g[x] for x in samples], "site": [site[x] for x in samples],
+                  "sex": "F", "age": 60}).to_csv(os.path.join(t, "cohort.metadata.tsv"), sep="\t", index=False)
+    pd.DataFrame([[x, ty, g[x], "PASS", "yes", "-", "-"] for ty in ("sRNA-Ext", "sRNA-Int") for x in samples],
+                 columns=["sample", "type", "group", "qc", "in_statistics", "rules", "details"]).to_csv(
+        os.path.join(t, "cohort.qc_flags.tsv"), sep="\t", index=False)
+    feats = {"genus": ["Bacteroides", "Faecalibacterium", "Blautia_A"], "mirna": ["hsa-miR-21-5p", "hsa-miR-192-5p"],
+             "rna_class": ["rRNA", "tRNA", "unknown"], "fnas_kegg_ko": ["K00001"]}
+    for ty in ("sRNA-Ext", "sRNA-Int"):
+        for st, fs in feats.items():
+            m = pd.DataFrame(rng.integers(0, 500, (len(fs), len(samples))), index=fs, columns=samples)
+            m.index.name = "feature"
+            m.to_csv(os.path.join(t, "cohort.%s.%s.counts.tsv" % (ty, st)), sep="\t")
+        pd.DataFrame({"feature": feats["genus"], "prevalence": 1.0, "H": [9.1, 1.0, 0.5], "p": [0.01, 0.6, 0.8],
+                      "q": [0.03, 0.9, 0.9], "mean_rel_case_a": 0.2, "mean_rel_case_b": 0.3,
+                      "mean_rel_control": 0.4}).to_csv(os.path.join(s, "cohort.%s.genus.by_group.tsv" % ty),
+                                                       sep="\t", index=False)
+        pd.DataFrame({"metric": ["raw_reads"], "n": [len(samples)], "H": [1.2], "p": [0.5], "q": [0.5],
+                      "median_case_a": [6e6], "median_case_b": [7e6], "median_control": [6.5e6]}).to_csv(
+            os.path.join(s, "cohort.%s.metrics_by_group.tsv" % ty), sep="\t", index=False)
+        for tag, lab in (("case_a_vs_control", "case_a vs control (within site: site_1)"),
+                         ("control_site_1_vs_control_site_2", "control site_1 vs control site_2 (site effect "
+                                                              "within control)")):
+            pd.DataFrame({"comparison": [lab], "n_a": [5], "n_b": [5], "pseudo_F": [1.5], "R2": [0.1],
+                          "p": [0.2]}).to_csv(os.path.join(s, "cohort.%s.matched.%s.permanova.tsv" % (ty, tag)),
+                                              sep="\t", index=False)
+            pd.DataFrame({"feature": feats["genus"], "prevalence": 1.0, "mean_rel_a": 0.3, "mean_rel_b": 0.2,
+                          "P(a>b)": [0.8, 0.5, 0.4], "p": [0.02, 0.9, 0.5], "q": [0.06, 0.9, 0.9]}).to_csv(
+                os.path.join(s, "cohort.%s.matched.%s.genus.tsv" % (ty, tag)), sep="\t", index=False)
+        pd.DataFrame({"variable": ["group", "site"], "n": len(samples), "levels": [3, 2], "pseudo_F": [1.1, 2.0],
+                      "R2": [0.05, 0.04], "p": [0.3, 0.01]}).to_csv(
+            os.path.join(s, "cohort.%s.genus.permanova.tsv" % ty), sep="\t", index=False)
+        pd.DataFrame({"sample": samples, "group": [g[x] for x in samples], "NMDS1": rng.random(len(samples)),
+                      "NMDS2": rng.random(len(samples)), "stress": 0.15, "permanova_R2": 0.05,
+                      "permanova_p": 0.3}).to_csv(os.path.join(s, "cohort.%s.genus.nmds.tsv" % ty), sep="\t",
+                                                  index=False)
+        for m in ("M1", "M2"):
+            pd.DataFrame({"feature": feats["genus"] * 2, "name": "", "n": len(samples),
+                          "term": ["group: case_a vs control"] * 3 + ["site: site_2 vs site_1"] * 3,
+                          "estimate": [1.0, 0.1, -0.2, 0.3, 0.0, 0.1], "se": 0.2, "t": 1.0,
+                          "p": [0.001, 0.5, 0.4, 0.2, 0.9, 0.6], "q": [0.003, 0.7, 0.7, 0.6, 0.9, 0.9]}).to_csv(
+                os.path.join(s, "cohort.%s.model_%s.genus.tsv" % (ty, m)), sep="\t", index=False)
+    pd.DataFrame([["M1", "group+site", ty, len(samples), "-"] for ty in ("sRNA-Ext", "sRNA-Int")] +
+                 [["M2", "group+site+age", ty, len(samples), "dose"] for ty in ("sRNA-Ext", "sRNA-Int")],
+                 columns=["model", "formula", "type", "libraries", "notes"]).to_csv(
+        os.path.join(s, "cohort.models.tsv"), sep="\t", index=False)
+    pd.DataFrame({"type": ["sRNA-Ext"], "set": ["genus"], "comparison": ["case_a vs control (site_1)"],
+                  "group": ["case_a"], "block": ["site_1"], "n_cases": [5], "n_controls": [5],
+                  "median_dist_cases": [0.4], "median_dist_controls": [0.3], "ratio": [1.3], "p": [0.2],
+                  "q": [0.2]}).to_csv(os.path.join(s, "cohort.heterogeneity.dispersion.tsv"), sep="\t", index=False)
+    return root
+
+
+def test_srna_layer(tmp_path):
+    """imp-explorer srna: sRNA-IMP cohort results into the release, Cohort / sRNA / Search pages"""
+    from impexplorer import srna
+    root = make_fixture.main(str(tmp_path), n=12)
+    out = tmp_path / "release"
+    export.main(["--imp-root", root, "--metadata", str(tmp_path / "metadata.tsv"), "--out", str(out),
+                 "--threads", "2"])
+    samples = ["s%02d" % i for i in range(1, 13)]          # sRNA-IMP names in lower case
+    make_srna_cohort(str(tmp_path / "Cohort"), samples)
+    assert srna.main(["--data", str(out), "--srna-cohort", str(tmp_path / "Cohort"), "--id-case", "upper"]) == 0
+    man = read_manifest(str(out))["srna"]
+    assert man["samples_in_release"] == 12 and set(man["fractions"]) == {"srna_ext", "srna_int"}
+    f = read_table(str(out), "srna_features")
+    assert set(f["set"]) == {"genus", "mirna", "rna_class"}                  # fnas_* left out
+    assert abs(f.groupby(["sample_id", "omic", "set"])["rel"].sum() - 1).max() < 1e-9
+    t = read_table(str(out), "srna_tests")
+    assert {"all groups", "case_a vs control (site_1)", "control: site_1 vs site_2"} <= set(t["comparison"])
+    assert {"srna_ext.genus", "srna_ext.metrics"} <= set(t["layer"])
+    mo = read_table(str(out), "srna_models")
+    assert mo[mo["focus"].astype(str).isin(["True", "true"])]["term"].unique().tolist() == ["group: case_a vs control"]
+    ov = read_table(str(out), "srna_models_overview")
+    assert ov[(ov["model"] == "M1") & (ov["layer"] == "srna_ext.genus")]["features_q_focus"].iloc[0] == 1
+    pm = read_table(str(out), "srna_permanova")
+    assert "control: site_1 vs site_2" in set(pm["comparison"]) and "site (all samples)" in set(pm["comparison"])
+    try:
+        import dash  # noqa: F401
+    except ImportError:
+        return
+    from impexplorer.app import create_app
+    from impexplorer.app.pages import cohort, search
+    app = create_app(str(out))
+    names = [p.name for p in app._imp_pages]
+    assert "sRNA" in names and "Cohort" in names            # Cohort page with the sRNA results alone
+    d = app._imp_data
+    for p in app._imp_pages:
+        assert p.layout(d) is not None
+    v, _ = cohort.feature_values(d, "srna_int.genus", "Bacteroides")
+    assert len(v) == 12 and (v > 0).all()
+    hits = search.find(d, "miR-21")
+    assert (hits["layer"] == "sRNA").any()
+    ser = search.series_for(d, "taxonomy", "kraken2_bracken · mg · genus", "Bacteroides", d.samples)
+    assert "sRNA-Ext" in ser and "sRNA-Int" in ser

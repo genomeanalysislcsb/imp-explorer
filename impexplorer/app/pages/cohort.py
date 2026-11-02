@@ -1,5 +1,6 @@
-"""Cohort: results of 'imp-explorer cohort' (group comparisons within blocks, adjusted models, beta diversity,
-QC and covariates), browsable per layer, comparison, model and term. Shown when the release has cohort tables."""
+"""Cohort: results of 'imp-explorer cohort' (IMP3 layers) and, if imported with 'imp-explorer srna', of the sRNA-IMP
+cohort analysis (sRNA layers): group comparisons within blocks, adjusted models, beta diversity, QC and covariates,
+browsable per layer, comparison, model and term. Shown when the release has cohort results of either."""
 import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
@@ -12,17 +13,35 @@ from ._common import box_by_group, grid
 
 
 def settings(data):
-    return data.manifest.get("cohort", {})
+    """settings of the IMP3 cohort analysis, else of the imported sRNA cohort analysis"""
+    return data.manifest.get("cohort") or data.manifest.get("srna", {})
+
+
+def srna(data):
+    return data.manifest.get("srna", {})
+
+
+def is_srna(layer):
+    return str(layer).startswith("srna_")
 
 
 def layer_label(data, key):
     if key == "metrics":
-        return "library metrics"
-    return settings(data).get("layers", {}).get(key, {}).get("label", key)
+        return "IMP3 library metrics"
+    for st in (data.manifest.get("cohort", {}), srna(data)):
+        lab = st.get("layers", {}).get(key, {}).get("label")
+        if lab:
+            return lab
+    return key
 
 
 def layer_db(key):
     p = key.split(".")
+    if is_srna(key):
+        s = p[1] if len(p) > 1 else ""
+        if s in ("genus", "family", "species"):
+            return "gtdb"
+        return s[3:] if s.startswith("fn_kegg_") or s == "fn_cog" else None
     if p[0] in ("kraken", "mag", "motus") or (p[0] == "ratio" and p[1] == "mag"):
         return "gtdb" if p[0] != "motus" else None
     return p[1] if p[0] == "ratio" else p[0]
@@ -32,22 +51,29 @@ def ordered(data, table, col):
     """distinct values in the order of the cohort settings (layers) or of first appearance (comparisons)"""
     vals = data.distinct(table, col)
     if col == "layer":
-        order = ["metrics"] + list(settings(data).get("layers", {}))
+        order = ["metrics"] + list(data.manifest.get("cohort", {}).get("layers", {})) + list(srna(data).get("layers", {}))
         return [v for v in order if v in vals] + [v for v in vals if v not in order]
-    d = data.q("SELECT DISTINCT %s AS v, kind FROM %s" % (col, table))
+    d = data.q("SELECT DISTINCT %s AS v, kind FROM %s" % (col, table)) if col != "layer" else pd.DataFrame()
     rank = {"within": 0, "pooled": 0, "block": 1, "groups": 2, "partial": 3, "kruskal": 4}
     d["r"] = d["kind"].map(rank).fillna(5)
     return list(d.sort_values(["r", "v"])["v"].drop_duplicates())
 
 
 def gcolors(data):
-    st = settings(data)
-    return {g: PALETTE[i % len(PALETTE)] for i, g in enumerate(st.get("groups") or [])}
+    gs = settings(data).get("groups") or srna(data).get("groups") or []
+    return {g: PALETTE[i % len(PALETTE)] for i, g in enumerate(gs)}
 
 
 def cells(data):
-    """sample -> 'group · block', colour map of these cells (colour of the group)"""
-    s = data.q("SELECT sample_id, \"group\", block FROM cohort_samples")
+    """sample -> 'group · block', colour map of these cells (colour of the group); IMP3 cohort samples, plus the
+    sRNA samples"""
+    parts = []
+    if data.has("cohort_samples"):
+        parts.append(data.q("SELECT sample_id, \"group\", block FROM cohort_samples"))
+    if data.has("srna_samples"):
+        parts.append(data.q("SELECT DISTINCT sample_id, \"group\", block FROM srna_samples"))
+    s = pd.concat(parts).drop_duplicates("sample_id") if parts else pd.DataFrame(columns=["sample_id", "group",
+                                                                                          "block"])
     st = settings(data)
     lab = s["group"].astype(str) + ((" · " + s["block"].astype(str)) if st.get("block") else "")
     gc = gcolors(data)
@@ -58,6 +84,15 @@ def cells(data):
 def feature_values(data, layer, feature):
     """per-sample value of one feature of a layer, from the release tables; (Series, axis title)"""
     p = layer.split(".")
+    if is_srna(layer):
+        frac, st = p[0], p[1]
+        if st == "metrics":
+            d = data.q("SELECT sample_id, value AS v FROM srna_qc WHERE omic=? AND metric=?", [frac, feature])
+            return d.set_index("sample_id")["v"].astype(float), "%s (%s)" % (feature, frac)
+        d = data.q("SELECT sample_id, rel AS v FROM srna_features WHERE omic=? AND \"set\"=? AND feature=?",
+                   [frac, st, feature])
+        return d.set_index("sample_id")["v"], "share of the %s reads (%s)" % (
+            {"mirna": "human miRNA", "rna_class": "non-human"}.get(st, st.replace("fn_", "")), frac)
     if layer == "metrics":
         d = data.q("SELECT * FROM cohort_samples")
         if feature not in d.columns:
@@ -103,13 +138,16 @@ def feature_box(data, layer, feature, subtitle=""):
     v, ytitle = feature_values(data, layer, feature)
     lab, cmap = cells(data)
     v = v.reindex(lab.index)
-    if not layer.startswith(("metrics", "ratio")):
+    plain = layer.startswith(("metrics", "ratio")) or layer.endswith(".metrics")
+    if not plain:
         v = v.fillna(0)
     pos = v[v > 0]
-    log = not layer.startswith(("metrics", "ratio")) and len(pos) > 3 and (
+    log = not plain and len(pos) > 3 and (
         pos.max() / max(pos.min(), 1e-12) > 30 or (v == 0).mean() > 0.2)
     pseudo = pos.min() / 2 if log else None
     name = ytitle if layer == "metrics" else feature
+    if is_srna(layer):
+        v = v.dropna() if plain else v   # samples without this sRNA library are not 0
     return box_by_group(v, lab, cmap, ytitle + (", 0 at the bottom line" if log else ""), log=log, pseudo=pseudo,
                         title="%s · %s%s" % (name, layer_label(data, layer), subtitle), height=420)
 
@@ -136,6 +174,7 @@ def volcano(d, x, xtitle, q, title):
 
 
 def table(id_, d, cols, layer):
+    cols = [c for c in cols if c in d.columns and d[c].notna().any() and not (d[c].astype(str) == "").all()]
     d = d[cols].copy()
     if "name" in d.columns and not d["name"].fillna("").astype(str).str.strip().replace("nan", "").any():
         d = d.drop(columns=["name"])
@@ -146,8 +185,8 @@ def table(id_, d, cols, layer):
 
 
 def tab_tests(data):
-    lays = ordered(data, "cohort_tests", "layer")
-    comps = ordered(data, "cohort_tests", "comparison")
+    lays = ordered(data, "all_tests", "layer")
+    comps = ordered(data, "all_tests", "comparison")
     c0 = next((c for c in comps if c != "all groups"), comps[0] if comps else None)
     return html.Div([
         html.Div([control("layer", dd("co-t-layer", [{"label": layer_label(data, k), "value": k} for k in lays],
@@ -163,10 +202,15 @@ def tab_tests(data):
 
 
 def tab_models(data):
-    st = settings(data)
-    ms = st.get("models", [])
-    opts = [{"label": "%s: %s%s" % (m["model"], m["formula"], " — " + m["note"] if m.get("note") else ""),
-             "value": m["model"]} for m in ms]
+    ov = data.q("SELECT model, formula, max(note) AS note, max(CASE WHEN layer LIKE 'srna_%' THEN 1 ELSE 0 END) "
+                "AS has_srna, max(CASE WHEN layer LIKE 'srna_%' THEN 0 ELSE 1 END) AS has_imp "
+                "FROM all_models_overview GROUP BY 1, 2")
+    ov["k"] = ov["model"].str.extract(r"(\d+)")[0].astype(float)
+    ov = ov.sort_values(["k", "has_srna"])
+    src = lambda r: "IMP3 + sRNA" if r.has_srna and r.has_imp else ("sRNA" if r.has_srna else "IMP3")
+    opts = [{"label": "%s: %s%s  [%s]" % (r.model, r.formula, " — " + r.note if r.note not in (None, "", "nan")
+                                          else "", src(r)),
+             "value": "%s|%s" % (r.model, r.formula)} for r in ov.itertuples()]
     return html.Div([
         html.Div([control("model", dd("co-m-model", opts, opts[0]["value"] if opts else None)),
                   control("layer", dd("co-m-layer", [], None)),
@@ -183,7 +227,7 @@ def tab_models(data):
 
 
 def tab_beta(data):
-    lays = ordered(data, "cohort_ordination", "layer")
+    lays = ordered(data, "all_ordination", "layer")
     return html.Div([
         html.Div([control("layer", dd("co-b-layer", [{"label": layer_label(data, k), "value": k} for k in lays],
                                       lays[0] if lays else None)),
@@ -196,7 +240,7 @@ def tab_beta(data):
 
 
 def tab_qc(data):
-    mets = settings(data).get("metrics", {})
+    mets = data.manifest.get("cohort", {}).get("metrics", {})
     return html.Div([
         card("Covariates by group", html.Div(id="co-q-cov"), note="Kruskal-Wallis / χ² overall and per comparison; "
              "imbalanced covariates belong in the models"),
@@ -213,13 +257,20 @@ def tab_qc(data):
 
 
 def layout(data):
-    st = settings(data)
-    lead = ("Results of imp-explorer cohort (%s): %d of %d samples, groups %s (reference %s)%s, %d models. The "
-            "global 'group by' and filter controls do not apply here; the analysis is fixed. The full report is "
-            "cohort/cohort.report.html of the release." % (
-                st.get("created", "?")[:10], st.get("kept", 0), st.get("samples", 0), ", ".join(st.get("groups", [])),
-                st.get("reference", "–"), ", block %s" % st["block"] if st.get("block") else "",
-                len(st.get("models", []))))
+    st, sr = data.manifest.get("cohort", {}), srna(data)
+    parts = []
+    if st:
+        parts.append("IMP3 layers from imp-explorer cohort (%s): %d of %d samples, groups %s (reference %s)%s, "
+                     "%d models; full report: cohort/cohort.report.html of the release." % (
+                         st.get("created", "?")[:10], st.get("kept", 0), st.get("samples", 0),
+                         ", ".join(st.get("groups", [])), st.get("reference", "–"),
+                         ", block %s" % st["block"] if st.get("block") else "", len(st.get("models", []))))
+    if sr:
+        parts.append("sRNA layers (%s) from the sRNA-IMP cohort analysis, as in its report (%d samples, %d in this "
+                     "release, %d models)." % (", ".join(sr.get("fractions", {}).values()), sr.get("samples", 0),
+                                                 sr.get("samples_in_release", 0), len({m["model"] for m in sr.get("models", [])})))
+    lead = " ".join(parts) + (" The global 'group by' and filter controls do not apply here; the analyses are "
+                              "fixed. Models with the same number and formula are shown together.")
     return html.Div([
         html.H2("Cohort"), html.P(lead, className="lead"),
         dcc.Tabs(id="co-tabs", value="tests", children=[
@@ -240,12 +291,12 @@ def register(app, data):
     def _tests(layer, comp):
         if not layer or not comp:
             return empty_fig(), None
-        d = data.q("SELECT * FROM cohort_tests WHERE layer=? AND comparison=? ORDER BY p", [layer, comp])
+        d = data.q("SELECT * FROM all_tests WHERE layer=? AND comparison=? ORDER BY p", [layer, comp])
         kw = comp == "all groups"
         d["x"] = d["effect"] if kw else d["effect"] - 0.5
         fig = volcano(d, "x", "H" if kw else "P(a > b) − 0.5", q, "%s · %s" % (layer_label(data, layer), comp))
-        cols = ["feature", "name", "medians", "p", "q"] if kw else \
-            ["feature", "name", "n_a", "n_b", "median_a", "median_b", "effect", "p", "q"]
+        cols = ["feature", "name", "medians", "means", "prevalence", "p", "q"] if kw else \
+            ["feature", "name", "n_a", "n_b", "median_a", "median_b", "mean_a", "mean_b", "effect", "p", "q"]
         return fig, table("co-t-grid", d, cols, layer)
 
     @app.callback(Output("co-t-box", "figure"), Input("co-t-grid", "selectedRows"), State("co-t-layer", "value"),
@@ -257,11 +308,12 @@ def register(app, data):
 
     # ---------------- models
     @app.callback(Output("co-m-layer", "options"), Output("co-m-layer", "value"), Input("co-m-model", "value"))
-    def _mlayers(model):
-        if not model:
+    def _mlayers(key):
+        if not key:
             return [], None
-        ov = data.q("SELECT layer, n, features, features_q_focus FROM cohort_models_overview WHERE model=? "
-                    "AND n > 0", [model])
+        model, formula = key.split("|", 1)
+        ov = data.q("SELECT layer, n, features, features_q_focus FROM all_models_overview WHERE model=? "
+                    "AND formula=? AND n > 0", [model, formula])
         opts = [{"label": "%s (n=%d, %d hits)" % (layer_label(data, r.layer), r.n, r.features_q_focus),
                  "value": r.layer} for r in ov.itertuples()]
         best = ov.sort_values("features_q_focus", ascending=False)["layer"].iloc[0] if len(ov) else None
@@ -269,23 +321,25 @@ def register(app, data):
 
     @app.callback(Output("co-m-term", "options"), Output("co-m-term", "value"), Output("co-m-info", "children"),
                   Input("co-m-model", "value"), Input("co-m-layer", "value"))
-    def _mterms(model, layer):
-        if not model or not layer:
+    def _mterms(key, layer):
+        if not key or not layer:
             return [], None, None
-        t = data.q("SELECT term, bool_or(focus) AS focus FROM cohort_models WHERE model=? AND layer=? GROUP BY 1",
+        model = key.split("|", 1)[0]
+        t = data.q("SELECT term, bool_or(focus) AS focus FROM all_models WHERE model=? AND layer=? GROUP BY 1",
                    [model, layer])
         t = t.sort_values("focus", ascending=False)
         opts = [{"label": ("★ " if f else "") + x, "value": x} for x, f in zip(t["term"], t["focus"])]
-        info = data.q("SELECT info FROM cohort_models_overview WHERE model=? AND layer=?", [model, layer])
+        info = data.q("SELECT info FROM all_models_overview WHERE model=? AND layer=?", [model, layer])
         txt = info["info"].iloc[0] if len(info) and info["info"].iloc[0] not in (None, "nan", "") else None
         return opts, (t["term"].iloc[0] if len(t) else None), ("design: " + txt) if txt else None
 
     @app.callback(Output("co-m-volcano", "figure"), Output("co-m-table", "children"),
                   Input("co-m-model", "value"), Input("co-m-layer", "value"), Input("co-m-term", "value"))
-    def _models(model, layer, term):
-        if not (model and layer and term):
+    def _models(key, layer, term):
+        if not (key and layer and term):
             return empty_fig(), None
-        d = data.q("SELECT * FROM cohort_models WHERE model=? AND layer=? AND term=? ORDER BY p", [model, layer, term])
+        model = key.split("|", 1)[0]
+        d = data.q("SELECT * FROM all_models WHERE model=? AND layer=? AND term=? ORDER BY p", [model, layer, term])
         fig = volcano(d, "estimate", "estimate", q, "%s · %s · %s" % (model, layer_label(data, layer), term))
         return fig, table("co-m-grid", d, ["feature", "name", "n", "estimate", "se", "p", "q"], layer)
 
@@ -302,7 +356,10 @@ def register(app, data):
     def _beta(layer, method):
         if not layer:
             return empty_fig(), None, None
-        o = data.q("SELECT * FROM cohort_ordination WHERE layer=? AND method=?", [layer, method])
+        o = data.q("SELECT * FROM all_ordination WHERE layer=? AND method=?", [layer, method])
+        if o.empty:                                    # sRNA-IMP writes NMDS only, imp-explorer cohort PCoA (+ NMDS)
+            o = data.q("SELECT * FROM all_ordination WHERE layer=?", [layer])
+            method = o["method"].iloc[0] if len(o) else method
         gc = gcolors(data)
         syms = ["circle", "triangle-up", "square", "diamond", "cross", "x"]
         bl = sorted(o["block"].astype(str).unique()) if len(o) else []
@@ -321,8 +378,12 @@ def register(app, data):
             fig.update_layout(title="%s · stress %.3f" % (layer_label(data, layer), o["explained1"].iloc[0]))
         else:
             return empty_fig("no %s for this layer (cohort --nmds)" % method), None, None
-        pm = data.q("SELECT comparison, n, F, R2, p FROM cohort_permanova WHERE layer=?", [layer])
-        ds = data.q("SELECT comparison, n_a, n_b, median_dist_a, median_dist_b, ratio, p FROM cohort_dispersion "
+        pm = data.q("SELECT comparison, n, F, R2, p FROM all_permanova WHERE layer=? ORDER BY CASE kind WHEN 'within' "
+                    "THEN 0 WHEN 'pooled' THEN 0 WHEN 'block' THEN 1 WHEN 'groups' THEN 2 ELSE 3 END", [layer])
+        if pm.empty and is_srna(layer):                  # sRNA-IMP: matched PERMANOVA on genus profiles
+            pm = data.q("SELECT comparison, n, F, R2, p FROM all_permanova WHERE layer=?",
+                        [layer.split(".")[0] + ".genus"])
+        ds = data.q("SELECT comparison, n_a, n_b, median_dist_a, median_dist_b, ratio, p FROM all_dispersion "
                     "WHERE layer=?", [layer])
         return style(fig, 460), grid("co-b-pgrid", pm, height=230, fit=True), grid("co-b-dgrid", ds, height=170,
                                                                                     fit=True)
@@ -333,10 +394,16 @@ def register(app, data):
     def _qc(tab):
         if tab != "qc":
             raise PreventUpdate
-        cov = data.q("SELECT * FROM cohort_covariates") if data.has("cohort_covariates") else pd.DataFrame()
+        cov = data.q("SELECT * FROM cohort_covariates") if data.has("cohort_covariates") else (
+            data.q("SELECT * FROM srna_covariates") if data.has("srna_covariates") else pd.DataFrame())
         mt = data.q("SELECT feature, name, comparison, n_a, n_b, median_a, median_b, effect, p, q FROM "
                     "cohort_metric_tests ORDER BY p") if data.has("cohort_metric_tests") else pd.DataFrame()
-        fl = data.q("SELECT sample_id, \"group\", block, level, excluded, reasons FROM cohort_qc WHERE level <> 'PASS'")
+        fl = data.q("SELECT sample_id, \"group\", block, level, excluded, reasons FROM cohort_qc WHERE level <> 'PASS'") \
+            if data.has("cohort_qc") else pd.DataFrame()
+        if data.has("srna_samples"):
+            sf = data.q("SELECT sample_id, \"group\", block, qc AS level, in_statistics, type AS fraction, rules, details "
+                        "FROM srna_samples WHERE qc <> 'PASS'")
+            fl = pd.concat([fl, sf], ignore_index=True)
         return (grid("co-q-cgrid", cov, height=260, fit=True), grid("co-q-tgrid", mt, height=380, fit=True),
                 grid("co-q-fgrid", fl, height=260, fit=True))
 
@@ -353,5 +420,4 @@ def register(app, data):
         return feature_box(data, "metrics", metric)
 
 
-PAGE = Page(path="/cohort", name="Cohort", order=70, layout=layout, register=register,
-            requires=("cohort_samples", "cohort_tests"))
+PAGE = Page(path="/cohort", name="Cohort", order=70, layout=layout, register=register, requires=("all_tests",))

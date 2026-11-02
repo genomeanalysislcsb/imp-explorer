@@ -28,12 +28,26 @@ def find(data, text, limit=200):
         parts.append(data.q(
             "SELECT 'functions' AS layer, db || ' · ' || omic AS kind, feature AS name, count(DISTINCT sample_id) AS samples, "
             "NULL AS mean_pct FROM functions WHERE lower(feature) LIKE ? GROUP BY 1, 2, 3", [like]))
+    if data.has("srna_features"):
+        parts.append(data.q(
+            "SELECT 'sRNA' AS layer, 'sRNA · ' || omic || ' · ' || \"set\" AS kind, feature AS name, "
+            "count(DISTINCT sample_id) AS samples, round(100 * avg(rel), 4) AS mean_pct FROM srna_features "
+            "WHERE lower(feature) LIKE ? GROUP BY 1, 2, 3", [like]))
     d = pd.concat([p for p in parts if len(p)], ignore_index=True) if any(len(p) for p in parts) else pd.DataFrame()
     if not len(d):
         return d
     d = d.sort_values("samples", ascending=False).head(limit)
-    d["link"] = [md(k.split(" · ")[0], n) if L == "functions" else (md("gtdb", n) if L == "MAGs" else "")
-                 for L, k, n in zip(d["layer"], d["kind"], d["name"])]
+    def link(L, k, n):
+        if L == "functions":
+            return md(k.split(" · ")[0], n)
+        if L == "MAGs":
+            return md("gtdb", n)
+        if L == "sRNA":
+            st = k.split(" · ")[-1]
+            return md("gtdb", n) if st in ("genus", "family", "species") else (
+                md(st[3:], n) if st.startswith("fn_kegg") else "")
+        return ""
+    d["link"] = [link(L, k, n) for L, k, n in zip(d["layer"], d["kind"], d["name"])]
     return d[COLS]
 
 
@@ -41,6 +55,14 @@ def series_for(data, layer, kind, name, samples):
     """{label: Series(sample_id -> % value)} for every layer where the name occurs (same rank)"""
     ids = list(samples["sample_id"])
     out = {}
+    if layer == "sRNA":                       # an sRNA hit: its IMP3 counterpart (same rank / KEGG database) too
+        st = kind.split(" · ")[-1]
+        if st in ("genus", "family", "species"):
+            layer, kind = "taxonomy", "x · %s" % st
+        elif st.startswith("fn_"):
+            layer, kind = "functions", "%s · x" % st[3:]
+        else:
+            return srna_series(data, st, name, ids)
     if layer == "taxonomy" or layer == "MAGs":
         rank = kind.split(" · ")[-1]
         d = data.q("SELECT sample_id, source, omic, rel_abundance FROM taxonomy WHERE taxon = ? AND rank = ? AND "
@@ -61,14 +83,35 @@ def series_for(data, layer, kind, name, samples):
         d = d.merge(tot, on=["sample_id", "omic"])
         for omic, x in d.groupby("omic"):
             out["%s %s" % (db, omic)] = (x.set_index("sample_id")["reads"] / x.set_index("sample_id")["t"]) * 100
-    return {k: v.reindex(ids).fillna(0) for k, v in out.items()}
+    out = {k: v.reindex(ids).fillna(0) for k, v in out.items()}
+    if layer in ("taxonomy", "MAGs"):
+        out.update(srna_series(data, kind.split(" · ")[-1], name, ids))
+    elif layer == "functions":
+        out.update(srna_series(data, "fn_" + kind.split(" · ")[0], name, ids))
+    return out
+
+
+def srna_series(data, st, name, ids):
+    """sRNA shares of one feature in every sRNA fraction (only the libraries of that fraction)"""
+    if not data.has("srna_features"):
+        return {}
+    fr = data.manifest.get("srna", {}).get("fractions", {})
+    libs = data.q("SELECT DISTINCT sample_id, omic FROM srna_features WHERE \"set\" = ?", [st])
+    d = data.q("SELECT sample_id, omic, rel FROM srna_features WHERE \"set\" = ? AND feature = ?", [st, name])
+    out = {}
+    for omic, x in libs.groupby("omic"):
+        have = [i for i in ids if i in set(x["sample_id"])]
+        v = d[d["omic"] == omic].set_index("sample_id")["rel"].reindex(have).fillna(0) * 100
+        if (v > 0).any():
+            out[fr.get(omic, omic)] = v
+    return out
 
 
 def layout(data):
     return html.Div([
         html.H2("Search across layers"),
-        html.P("Type part of a taxon name (any rank, Kraken2 / mOTUs / GTDB of the MAGs) or a functional term "
-               "(KO, module, pathway, CAZyme, EC). Pick a hit to see it in every layer where it occurs.",
+        html.P("Type part of a taxon name (any rank, Kraken2 / mOTUs / GTDB of the MAGs / sRNA), a functional term "
+               "(KO, module, pathway, CAZyme, EC) or a human miRNA. Pick a hit to see it in every layer where it occurs.",
                className="lead"),
         dcc.Input(id="se-text", type="text", placeholder="e.g. Akkermansia, K00873, GH13 ...", debounce=True,
                   style={"width": "420px", "padding": "8px 10px", "border": "1px solid #cbd2d9",

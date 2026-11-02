@@ -29,6 +29,7 @@ nav:
       - Export IMP3 results: export.md
       - Run the app: running.md
       - Cohort analysis: cohort.md
+      - sRNA layer: srna.md
   - The app: app.md
   - Reference:
       - Release tables (data model): data-model.md

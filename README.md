@@ -35,6 +35,9 @@ imp-explorer cohort --data /path/to/release_v0.1 --block site --model "group+sit
 # ... or with the design in a settings file of the study (template: --write-config; an sRNA-IMP config works too)
 imp-explorer cohort --data /path/to/release_v0.1 --config study.cohort.yaml
 
+# optional: small-RNA results of sRNA-IMP (its Cohort folder) as an extra layer
+imp-explorer srna --data /path/to/release_v0.1 --srna-cohort /path/to/srna_outdir/Cohort
+
 imp-explorer run --data /path/to/release_v0.1
 ```
 
@@ -51,7 +54,8 @@ start it on a node and open it through an SSH tunnel (`ssh -L 8050:<node>:8050 <
 | MAGs | CheckM2 quality, GTDB taxonomy of the MAGs, abundance (mg) and activity (mt) of a taxon's MAGs by group, log2(mt/mg) per MAG, MAG catalogue |
 | Functions | KEGG KO / module / pathway, CAZy, EC per omic: clustered heatmap of the most variable terms (rows / samples clustered, CLR or log, site colour bar), group tests, one term by group, expression ratio mt/mg |
 | Search | one name across all layers (Kraken2, mOTUs, MAGs, functions) by group |
-| Cohort | results of `imp-explorer cohort`: group comparisons within blocks, adjusted models (volcano + table per model, layer, term), beta diversity, QC and covariates |
+| sRNA | sRNA-IMP results (optional): composition per fraction, QC, RNA classes, one feature next to mg and mt |
+| Cohort | results of `imp-explorer cohort` (and of the sRNA-IMP cohort analysis): group comparisons within blocks, adjusted models (volcano + table per model, layer, term), beta diversity, QC and covariates |
 
 The top bar sets the grouping variable (any metadata column with 2–12 values) and a sample filter for all pages, e.g.
 `site = site_1` to compare groups within one site.

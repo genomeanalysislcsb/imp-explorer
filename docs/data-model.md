@@ -74,6 +74,13 @@ layer, feature, n, term, focus, estimate, se, t, p, q), `cohort_models_overview`
 `cohort_dispersion`, `cohort_ordination` and `cohort_mag_prevalence`. The settings are stored in the manifest under
 `cohort`.
 
+## sRNA tables
+
+Written by [`imp-explorer srna`](srna.md) (optional): `srna_samples`, `srna_qc`, `srna_features` (`sample_id`,
+`omic` = sRNA fraction, `set`, `feature`, `reads`, `rel`), `srna_tests`, `srna_models`, `srna_models_overview`,
+`srna_permanova`, `srna_dispersion`, `srna_ordination`, `srna_covariates`; settings in the manifest under `srna`.
+The app combines the cohort results of both as views `all_tests`, `all_models`, ... (`UNION ALL BY NAME`).
+
 ## manifest.json
 
 ```json

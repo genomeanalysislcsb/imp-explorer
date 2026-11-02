@@ -11,6 +11,14 @@ CORE_TABLES = ("samples", "qc", "taxonomy", "bins", "bin_abundance", "functions"
 COHORT_TABLES = ("cohort_models", "cohort_models_overview", "cohort_tests", "cohort_metric_tests", "cohort_permanova",
                  "cohort_dispersion", "cohort_ordination", "cohort_samples", "cohort_covariates", "cohort_qc",
                  "cohort_mag_prevalence")     # written by 'imp-explorer cohort'; optional
+SRNA_TABLES = ("srna_samples", "srna_qc", "srna_features", "srna_tests", "srna_models", "srna_models_overview",
+               "srna_permanova", "srna_dispersion", "srna_ordination", "srna_covariates")   # 'imp-explorer srna'
+# views over the cohort results of IMP3 and of sRNA-IMP (same columns where they mean the same)
+UNION_VIEWS = {"all_tests": ("cohort_tests", "srna_tests"), "all_models": ("cohort_models", "srna_models"),
+               "all_models_overview": ("cohort_models_overview", "srna_models_overview"),
+               "all_permanova": ("cohort_permanova", "srna_permanova"),
+               "all_dispersion": ("cohort_dispersion", "srna_dispersion"),
+               "all_ordination": ("cohort_ordination", "srna_ordination")}
 HIDDEN_COLS = {"imp_dir"}
 
 
@@ -21,13 +29,19 @@ class Data:
         self.study = self.manifest.get("study") or os.path.basename(self.release)
         self._local = threading.local()
         self.tables = {}
-        for name in tuple(CORE_TABLES) + COHORT_TABLES + tuple(extra_tables):
+        for name in tuple(CORE_TABLES) + COHORT_TABLES + SRNA_TABLES + tuple(extra_tables):
             p = table_path(self.release, name)
             if p:
                 self.tables[name] = p
         con = duckdb.connect()
         for name, p in self.tables.items():
             con.execute("CREATE VIEW %s AS SELECT * FROM %s" % (name, self._reader(p)))
+        for view, parts in UNION_VIEWS.items():
+            have = [t for t in parts if t in self.tables]
+            if have:
+                con.execute("CREATE VIEW %s AS %s" % (view, " UNION ALL BY NAME ".join(
+                    "SELECT * FROM %s" % t for t in have)))
+                self.tables[view] = "(view)"
         self._con = con
         self.samples = self.q("SELECT * FROM samples") if "samples" in self.tables else pd.DataFrame(
             columns=["sample_id"])
