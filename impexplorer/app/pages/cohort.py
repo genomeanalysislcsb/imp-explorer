@@ -4,7 +4,7 @@ browsable per layer, comparison, model and term. Shown when the release has coho
 import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
-from dash import Input, Output, State, dcc, html
+from dash import Input, Output, State, ctx, dcc, html
 from dash.exceptions import PreventUpdate
 
 from ..links import md
@@ -194,7 +194,7 @@ def tab_tests(data):
                   control("comparison", dd("co-t-comp", comps, c0))], className="controls"),
         html.Div([card("Volcano", graph("co-t-volcano"), note="effect = P(first group > second) − 0.5 (van Elteren "
                        "within blocks / Mann-Whitney); all groups: Kruskal-Wallis H"),
-                  card("Features", html.Div(id="co-t-table"), note="click a row to plot the feature")],
+                  card("Features", html.Div(grid("co-t-grid", pd.DataFrame(columns=["feature"]), height=420, fit=True), id="co-t-table"), note="click a row to plot the feature")],
                  className="grid g2"),
         html.Div(style={"height": "16px"}),
         card("Feature by group and block", graph("co-t-box")),
@@ -218,7 +218,7 @@ def tab_models(data):
         html.Div(id="co-m-info", className="hint"),
         html.Div([card("Volcano", graph("co-m-volcano"), note="OLS on CLR (ratio layers: log2 mt/mg; metrics: own "
                        "scale), HC3 robust SE; numeric terms per SD, categorical vs the reference level"),
-                  card("Features", html.Div(id="co-m-table"), note="BH-FDR per model, layer and term; click a row")],
+                  card("Features", html.Div(grid("co-m-grid", pd.DataFrame(columns=["feature"]), height=420, fit=True), id="co-m-table"), note="BH-FDR per model, layer and term; click a row")],
                  className="grid g2"),
         html.Div(style={"height": "16px"}),
         card("Feature by group and block", graph("co-m-box"), note="raw values of the release (relative "
@@ -299,12 +299,19 @@ def register(app, data):
             ["feature", "name", "n_a", "n_b", "median_a", "median_b", "mean_a", "mean_b", "effect", "p", "q"]
         return fig, table("co-t-grid", d, cols, layer)
 
-    @app.callback(Output("co-t-box", "figure"), Input("co-t-grid", "selectedRows"), State("co-t-layer", "value"),
-                  prevent_initial_call=True)
-    def _tbox(rows, layer):
-        if not rows:
-            raise PreventUpdate
-        return feature_box(data, layer, rows[0]["feature"])
+    @app.callback(Output("co-t-box", "figure"), Input("co-t-grid", "selectedRows"), Input("co-t-layer", "value"),
+                  Input("co-t-comp", "value"))
+    def _tbox(rows, layer, comp):
+        """the clicked feature; until a row is clicked (and after a new layer / comparison) the top hit"""
+        if rows and ctx.triggered_id == "co-t-grid":
+            return feature_box(data, layer, rows[0]["feature"])
+        if not layer or not comp:
+            return empty_fig("choose a layer and a comparison")
+        top = data.q("SELECT feature FROM all_tests WHERE layer=? AND comparison=? ORDER BY p NULLS LAST LIMIT 1",
+                     [layer, comp])
+        if top.empty:
+            return empty_fig("no features for this selection")
+        return feature_box(data, layer, top["feature"].iloc[0], subtitle=" · top hit (click a row for another)")
 
     # ---------------- models
     @app.callback(Output("co-m-layer", "options"), Output("co-m-layer", "value"), Input("co-m-model", "value"))
@@ -343,12 +350,18 @@ def register(app, data):
         fig = volcano(d, "estimate", "estimate", q, "%s · %s · %s" % (model, layer_label(data, layer), term))
         return fig, table("co-m-grid", d, ["feature", "name", "n", "estimate", "se", "p", "q"], layer)
 
-    @app.callback(Output("co-m-box", "figure"), Input("co-m-grid", "selectedRows"), State("co-m-layer", "value"),
-                  prevent_initial_call=True)
-    def _mbox(rows, layer):
-        if not rows:
-            raise PreventUpdate
-        return feature_box(data, layer, rows[0]["feature"])
+    @app.callback(Output("co-m-box", "figure"), Input("co-m-grid", "selectedRows"), Input("co-m-model", "value"),
+                  Input("co-m-layer", "value"), Input("co-m-term", "value"))
+    def _mbox(rows, key, layer, term):
+        if rows and ctx.triggered_id == "co-m-grid":
+            return feature_box(data, layer, rows[0]["feature"])
+        if not (key and layer and term):
+            return empty_fig("choose a model, layer and term")
+        top = data.q("SELECT feature FROM all_models WHERE model=? AND layer=? AND term=? ORDER BY p NULLS LAST "
+                     "LIMIT 1", [key.split("|", 1)[0], layer, term])
+        if top.empty:
+            return empty_fig("no features for this selection")
+        return feature_box(data, layer, top["feature"].iloc[0], subtitle=" · top hit (click a row for another)")
 
     # ---------------- beta diversity
     @app.callback(Output("co-b-ord", "figure"), Output("co-b-perm", "children"), Output("co-b-disp", "children"),
