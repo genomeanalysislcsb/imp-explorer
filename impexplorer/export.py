@@ -11,6 +11,7 @@ Sample ids of --imp-root folders: the folder name, optionally translated (in thi
 """
 import argparse
 import concurrent.futures as cf
+import multiprocessing as mp
 import os
 import re
 import sys
@@ -155,7 +156,9 @@ def main(argv=None):
     parts = {k: [] for k in TABLE_ORDER}
     omics, errors = {}, {}
     jobs = list(zip(sheet["sample_id"], sheet["imp_dir"], [dbs] * len(sheet)))
-    with cf.ProcessPoolExecutor(max_workers=max(1, a.threads)) as ex:
+    # 'spawn': fresh worker processes. Forking a process that already runs threads (DuckDB, an app, a test run)
+    # can kill the workers (BrokenProcessPool), seen with Python 3.12.
+    with cf.ProcessPoolExecutor(max_workers=max(1, a.threads), mp_context=mp.get_context("spawn")) as ex:
         for i, (sid, base, res, err) in enumerate(ex.map(_one, jobs), 1):
             if err:
                 errors[sid] = err
