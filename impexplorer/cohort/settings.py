@@ -22,8 +22,8 @@ SRNA_KEYS = {
 ALIASES = {"match_col": "block", "group": "group_col", "groups": "group_order", "title": "name"}
 CONFIG_KEYS = ("metadata", "id_col", "group_col", "group_order", "reference", "block", "covariates", "model",
                "model_notes", "permutations", "sig_q", "outlier_z", "qc_drop", "term_names", "name", "layers",
-               "prevalence", "min_mg_pairs", "min_mt_pairs", "nmds")
-IGNORED = {"dir", "nmds_starts", "min_mirna_reads"}       # sRNA-specific COHORT_* keys without meaning here
+               "prevalence", "min_mg_pairs", "min_mt_pairs", "nmds", "nmds_starts")
+IGNORED = {"dir", "min_mirna_reads"}       # sRNA-specific COHORT_* keys without meaning here
 
 DEFAULT_LAYERS = ("kraken.genus.mg,kraken.genus.mt,kraken.species.mg,kraken.species.mt,"
                   "motus.species.mg,motus.species.mt,mag.genus.mg,mag.genus.mt,"
@@ -114,6 +114,7 @@ min_mg_pairs: 1000000
 min_mt_pairs: 1000000
 term_names:               # term<TAB>name TSVs or KEGG flat files for readable labels
 nmds: kraken.genus.mg,kegg_pathway.mg
+nmds_starts: 5
 layers: {layers}
 """
 
@@ -155,7 +156,9 @@ def parser():
     ap.add_argument("--qc-drop", default=None, choices=("FAIL", "WARN", "none"), help="samples left out  [FAIL]")
     ap.add_argument("--prevalence", type=float, default=None, help="features with >= 10 reads in at least this share "
                     "of samples are tested  [0.1]")
-    ap.add_argument("--nmds", default=None, help="layers with an NMDS ('' = none)")
+    ap.add_argument("--nmds", default=None, help="layers with an NMDS ('' = none); sRNA-IMP names (genus, "
+                    "fn_kegg_pathway) mean the metagenome layers (kraken.genus.mg, kegg_pathway.mg)")
+    ap.add_argument("--nmds-starts", type=int, default=None, help="random starts per NMDS (+ 1 PCoA start)  [5]")
     ap.add_argument("--term-names", default=None, help="TSV(s) term<TAB>name or KEGG flat files for readable labels")
     ap.add_argument("--name", default=None, help="title of the report  [study name]")
     ap.add_argument("--no-release-tables", action="store_true", help="do not write cohort_* tables into the release")
@@ -167,9 +170,26 @@ def parser():
 DEFAULTS = {"metadata": "", "id_col": "", "group_col": "group", "group_order": "", "reference": "", "block": "",
             "covariates": "", "model": "", "model_notes": "", "permutations": 999, "sig_q": 0.1, "outlier_z": 4.0,
             "qc_drop": "FAIL", "term_names": "", "name": "", "layers": DEFAULT_LAYERS, "prevalence": 0.1,
-            "min_mg_pairs": 1e6, "min_mt_pairs": 1e6, "nmds": "kraken.genus.mg,kegg_pathway.mg"}
-TYPES = {"permutations": int, "sig_q": float, "outlier_z": float, "prevalence": float, "min_mg_pairs": float,
+            "min_mg_pairs": 1e6, "min_mt_pairs": 1e6, "nmds": "kraken.genus.mg,kegg_pathway.mg", "nmds_starts": 5}
+TYPES = {"permutations": int, "nmds_starts": int, "sig_q": float, "outlier_z": float, "prevalence": float, "min_mg_pairs": float,
          "min_mt_pairs": float}
+
+
+RANKS = ("phylum", "class", "order", "family", "genus", "species")
+
+
+def nmds_layers(value):
+    """NMDS layers; names of the sRNA-IMP config (COHORT_NMDS: genus, fn_kegg_pathway, mirna, ...) are translated to
+    the metagenome layers here (kraken.genus.mg, kegg_pathway.mg); sRNA-only sets (mirna, rfam_*, ...) are left out"""
+    out = []
+    for k in [x.strip() for x in str(value or "").split(",") if x.strip()]:
+        if "." in k:
+            out.append(k)
+        elif k in RANKS:
+            out.append("kraken.%s.mg" % k)
+        elif k.startswith("fn_"):
+            out.append("%s.mg" % k[3:])
+    return ",".join(dict.fromkeys(out))
 
 
 def parse(argv=None):
@@ -185,6 +205,7 @@ def parse(argv=None):
             v = cfg.get(k, d)
             v = TYPES[k](v) if k in TYPES and v != "" else v
         setattr(a, k, v)
+    a.nmds = nmds_layers(a.nmds)
     if a.qc_drop not in ("FAIL", "WARN", "none"):
         ap.error("qc_drop must be FAIL, WARN or none (got %r)" % a.qc_drop)
     a.from_config = sorted(cfg)

@@ -414,9 +414,12 @@ def register(app, data):
         if not layer:
             return empty_fig(), None, None
         o = data.q("SELECT * FROM all_ordination WHERE layer=? AND method=?", [layer, method])
+        note = ""
         if o.empty:                                    # sRNA-IMP writes NMDS only, imp-explorer cohort PCoA (+ NMDS)
-            o = data.q("SELECT * FROM all_ordination WHERE layer=?", [layer])
-            method = o["method"].iloc[0] if len(o) else method
+            other = data.q("SELECT * FROM all_ordination WHERE layer=?", [layer])
+            if len(other):
+                note = " · no %s for this layer (cohort --nmds), %s shown" % (method, other["method"].iloc[0])
+                o, method = other[other["method"] == other["method"].iloc[0]], other["method"].iloc[0]
         gc = gcolors(data)
         syms = ["circle", "triangle-up", "square", "diamond", "cross", "x"]
         bl = sorted(o["block"].astype(str).unique()) if len(o) else []
@@ -430,9 +433,11 @@ def register(app, data):
         if len(o) and method == "PCoA":
             fig.update_xaxes(title="PCo1 (%.0f %%)" % (100 * o["explained1"].iloc[0]))
             fig.update_yaxes(title="PCo2 (%.0f %%)" % (100 * o["explained2"].iloc[0]))
-            fig.update_layout(title=layer_label(data, layer))
+            fig.update_layout(title=layer_label(data, layer) + note)
         elif len(o):
-            fig.update_layout(title="%s · stress %.3f" % (layer_label(data, layer), o["explained1"].iloc[0]))
+            fig.update_xaxes(title="NMDS1")
+            fig.update_yaxes(title="NMDS2")
+            fig.update_layout(title="%s · stress %.3f%s" % (layer_label(data, layer), o["explained1"].iloc[0], note))
         else:
             return empty_fig("no %s for this layer (cohort --nmds)" % method), None, None
         pm = data.q("SELECT comparison, n, F, R2, p FROM all_permanova WHERE layer=? ORDER BY CASE kind WHEN 'within' "

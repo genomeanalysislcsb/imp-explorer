@@ -74,7 +74,7 @@ understood, also mixed:
 
 Keys are the option names below, in any case, with or without the prefix `COHORT_` (`block`, `BLOCK`,
 `COHORT_BLOCK`, also the old `COHORT_MATCH_COL`). Keys that only matter for sRNA (`COHORT_MIN_MIRNA_READS`,
-`COHORT_NMDS_STARTS`, `COHORT_DIR`) and other variables of a pipeline config are ignored; unknown cohort keys are
+`COHORT_DIR`) and other variables of a pipeline config are ignored; unknown cohort keys are
 reported. `--srna-config` is an alias of `--config`.
 
 A study with several data types keeps one settings file (or the sRNA-IMP config) and passes it to each cohort
@@ -103,7 +103,8 @@ analysis, so groups, reference, blocks and models are the same for all of them.
 | `--min-mt-pairs` | `min_mt_pairs` | 1e6 | below this, the sample is left out of the metatranscriptome layers (WARN) |
 | `--prevalence` | `prevalence` | 0.1 | features with ≥ 10 reads in at least this share of the samples are tested |
 | `--layers` | `layers` | see below | feature sets |
-| `--nmds` | `nmds` | `kraken.genus.mg,kegg_pathway.mg` | layers with an NMDS |
+| `--nmds` | `nmds` | `kraken.genus.mg,kegg_pathway.mg` | layers with an NMDS besides the PCoA. sRNA-IMP names (`COHORT_NMDS=genus,fn_kegg_pathway,...`) mean the metagenome layers (`kraken.genus.mg`, `kegg_pathway.mg`); sRNA-only sets are left out |
+| `--nmds-starts` | `nmds_starts` | 5 | random starts per NMDS (+ 1 PCoA start); `COHORT_NMDS_STARTS` of the sRNA-IMP config |
 | `--out` | – | `<release>/cohort` | output directory |
 | `--no-release-tables`, `--no-report` | – | | skip the `cohort_*` release tables / the report |
 

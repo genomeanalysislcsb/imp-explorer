@@ -205,6 +205,8 @@ class Analysis:
         C = self.C
         perm, disp, ords = [], [], []
         nmds_layers = {k.strip() for k in (self.a.nmds or "").split(",") if k.strip()}
+        for k in sorted(nmds_layers - set(C.layers)):
+            C.note("NMDS for %s skipped: not an analysed layer" % k)
         P = self.a.permutations
         for key, L in C.layers.items():
             if L.kind not in ("counts", "metab", "auc"):
@@ -225,7 +227,7 @@ class Analysis:
             if key in nmds_layers:
                 iso = isolated_samples(D)
                 keep = [i for i in range(len(ss)) if i not in iso]
-                Xn, stress = nmds(D[np.ix_(keep, keep)], k=2, starts=5)
+                Xn, stress = nmds(D[np.ix_(keep, keep)], k=2, starts=int(getattr(self.a, "nmds_starts", 5) or 5))
                 if Xn is not None:
                     ords.append(pd.DataFrame({"layer": key, "sample_id": [ss[i] for i in keep], "axis1": Xn[:, 0],
                                               "axis2": Xn[:, 1], "method": "NMDS",

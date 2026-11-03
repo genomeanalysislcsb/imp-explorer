@@ -620,3 +620,13 @@ def test_pfam_cog_functions(tmp_path):
     t = read_table(str(out), "cohort_tests")
     assert {"pfam.mg", "pfam.mt", "cog.mg", "cog.mt"} <= set(t["layer"])
     assert t[t["feature"] == "COG0001"]["name"].iloc[0] == "Glutamate-1-semialdehyde aminotransferase"
+
+
+def test_nmds_names_from_srna_config(tmp_path):
+    """COHORT_NMDS of an sRNA-IMP config names sRNA sets: translated to the metagenome layers"""
+    from impexplorer.cohort import settings
+    cfg = tmp_path / "srna.config.sh"
+    cfg.write_text('COHORT_NMDS="${COHORT_NMDS-genus,fn_kegg_pathway,mirna,rfam_family}"\n'
+                   'COHORT_NMDS_STARTS="${COHORT_NMDS_STARTS-10}"\n')
+    a = settings.parse(["--data", str(tmp_path), "--config", str(cfg)])
+    assert a.nmds == "kraken.genus.mg,kegg_pathway.mg" and a.nmds_starts == 10
