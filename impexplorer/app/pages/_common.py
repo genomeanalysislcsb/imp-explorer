@@ -256,7 +256,9 @@ def clustered_heatmap(M, groups, cmap, rows="variance", cols="top", values="log"
     # heatmap
     text = [[f"{f} · {s}" for s in sorder] for f in forder]
     fig.add_trace(go.Heatmap(z=Z.T.values.astype(float).tolist(), x=xs, y=list(range(len(forder))), colorscale="RdBu_r", zmid=0, zmin=-3,
-                             zmax=3, colorbar=dict(title="z", thickness=10, len=min(0.6, 300 / max(height or 600, 300)), y=0, yanchor="bottom", x=1.0, xanchor="left", xpad=110 if rZ is not None else 10), text=text,
+                             zmax=3, colorbar=dict(title=dict(text="z", side="top"), orientation="h", thickness=8, len=160, lenmode="pixels",
+                                           x=1.0, xanchor="right", y=0, yanchor="top", ypad=6,
+                                           tickfont=dict(size=9)), text=text,
                              hovertemplate="%{text}<br>z %{z:.2f}<extra></extra>"), row=hr, col=2)
     lab = ylabels or {}
     fig.update_yaxes(tickmode="array", tickvals=list(range(len(forder))), ticktext=[lab.get(f, f) for f in forder],
@@ -281,5 +283,5 @@ def clustered_heatmap(M, groups, cmap, rows="variance", cols="top", values="log"
             pos += n
     style(fig, height or (220 + 14 * len(forder) + 22 * nb + (70 if show_cd else 0)), legend=False)
     fig.update_layout(title=title, margin=dict(l=10 if rZ is not None else 80, r=230 if rZ is not None else 150,
-                                               t=40 if title else 20, b=20))
+                                               t=40 if title else 20, b=50))   # z colour bar under the heatmap
     return fig
