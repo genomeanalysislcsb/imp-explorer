@@ -89,3 +89,11 @@ The app combines the cohort results of both as views `all_tests`, `all_models`, 
  "sources": {"pipeline": "IMP3", "function_dbs": ["kegg_ko", "..."]},
  "failed_samples": {}, "metadata_without_output": []}
 ```
+
+## Metabolomics tables
+
+Written by [`imp-explorer metabolomics`](metabolomics.md) (optional): `metab_assays` (`assay`, `label`, `platform`,
+`matrix`, `acquisition_date`, `value_type`, `units`, `n_samples`, `n_features`, `n_in_release`, ...), `metab_features`
+(`assay`, `feature_id`, `name`, `annotation`, ...), `metab_values` (`sample_id`, `assay`, `feature_id`, `value`,
+`source_id`), `metab_samples`; summary in the manifest under `metabolomics`. The cohort analysis treats each assay as a
+layer `metab.<assay>`.

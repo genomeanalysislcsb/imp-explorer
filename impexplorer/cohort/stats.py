@@ -316,6 +316,30 @@ def bray_curtis(X):
     return (D + D.T) / 2
 
 
+def log_values(X):
+    """metabolomics values -> log2(x + half the smallest positive value of the feature); negative input (already on
+    a log scale) is returned unchanged"""
+    X = np.asarray(X, float)
+    if (X < 0).any():
+        return X
+    out = np.empty_like(X)
+    for j in range(X.shape[1]):
+        pos = X[:, j][X[:, j] > 0]
+        out[:, j] = np.log2(X[:, j] + (pos.min() / 2 if len(pos) else 1.0))
+    return out
+
+
+def euclidean_z(X):
+    """Euclidean distances of autoscaled (z-scored) log values: the usual beta diversity of metabolite profiles"""
+    L = log_values(X)
+    sd = L.std(axis=0)
+    L = (L[:, sd > 0] - L[:, sd > 0].mean(axis=0)) / sd[sd > 0]
+    G = (L ** 2).sum(axis=1)
+    D = np.sqrt(np.maximum(G[:, None] + G[None, :] - 2 * L @ L.T, 0))
+    np.fill_diagonal(D, 0)
+    return D
+
+
 def pcoa(D, k=2):
     n = D.shape[0]
     J = np.eye(n) - np.ones((n, n)) / n

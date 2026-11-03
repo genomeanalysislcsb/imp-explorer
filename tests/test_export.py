@@ -400,3 +400,95 @@ def test_srna_layer(tmp_path):
     assert (hits["layer"] == "sRNA").any()
     ser = search.series_for(d, "taxonomy", "kraken2_bracken · mg · genus", "Bacteroides", d.samples)
     assert "sRNA-Ext" in ser and "sRNA-Int" in ser
+
+
+def make_metab_tables(folder, meta):
+    """generic metabolomics tables (metabolomics_export.py format), sample ids as 'EB01_s01_t0' to test the mapping;
+    feature 'butyrate' higher in case_a"""
+    import numpy as np
+    os.makedirs(folder, exist_ok=True)
+    rng = np.random.default_rng(3)
+    pd.DataFrame([{"assay": "scfa", "label": "Short-chain fatty acids", "platform": "GC-MS", "matrix": "faecal water",
+                   "acquisition_date": "2023-11-06", "value_type": "concentration", "units": "umol/g"},
+                  {"assay": "lipids", "label": "Lipids", "platform": "LC-MS", "matrix": "faecal extract",
+                   "acquisition_date": "2024-09-26", "value_type": "normalised area", "units": "relative"}]
+                 ).to_parquet(os.path.join(folder, "metabolomics_assays.parquet"), index=False)
+    feats = [("scfa", "acetate", "acetate", "identified (targeted)"), ("scfa", "butyrate", "butyrate", "identified (targeted)"),
+             ("scfa", "propionate", "propionate", "identified (targeted)")] + \
+            [("lipids", "L%02d@%.1f" % (i, 5 + i / 3), "PC(3%d:1)" % i, "identified" if i < 6 else "unknown")
+             for i in range(10)]
+    pd.DataFrame(feats, columns=["assay", "feature_id", "name", "annotation"]).to_csv(
+        os.path.join(folder, "metabolomics_features.tsv"), sep="\t", index=False)
+    rows = []
+    for _, r in meta.iterrows():
+        sid = "EB01_%s_t0" % r["sample_id"].lower()
+        for a, f, _, _ in feats:
+            if a == "lipids" and r["sample_id"] == "S03":
+                continue                                       # one sample not measured in one assay
+            v = rng.lognormal(3 if a == "scfa" else 0, 0.4)
+            if f == "butyrate" and r["group"] == "case_a":
+                v *= 4
+            if f == "L09@8.0" and rng.random() < 0.5:
+                v = 0.0                                        # half not detected
+            rows.append((sid, a, f, v))
+    pd.DataFrame(rows, columns=["sample_id", "assay", "feature_id", "value"]).to_csv(
+        os.path.join(folder, "metabolomics_values.tsv.gz"), sep="\t", index=False)
+
+
+def test_metabolomics_layer(tmp_path):
+    """imp-explorer metabolomics: generic tables into the release; cohort layers metab.*; app pages"""
+    from impexplorer import cohort, metabolomics
+    root = make_fixture.main(str(tmp_path), n=30)
+    out = tmp_path / "release"
+    export.main(["--imp-root", root, "--metadata", str(tmp_path / "metadata.tsv"), "--out", str(out),
+                 "--threads", "2"])
+    meta = pd.read_csv(tmp_path / "metadata.tsv", sep="\t")
+    make_metab_tables(str(tmp_path / "metab"), meta)
+    assert metabolomics.main(["--data", str(out), "--metab", str(tmp_path / "metab"),
+                              "--id-regex", r"_(s\d+)_", "--id-case", "upper"]) == 0
+    man = read_manifest(str(out))["metabolomics"]
+    assert man["samples_in_release"] == 30 and set(man["assays"]) == {"scfa", "lipids"}
+    assert man["assays"]["lipids"]["n_samples"] == 29
+    v = read_table(str(out), "metab_values")
+    assert set(v["sample_id"]) == set(meta["sample_id"]) and v["source_id"].str.startswith("EB01_").all()
+    rc = cohort.main(["--data", str(out), "--block", "site", "--group-order", "control,case_a,case_b",
+                      "--model", "group+site", "--permutations", "49", "--no-report",
+                      "--layers", "kraken.genus.mg,metab"])
+    assert rc == 0
+    t = read_table(str(out), "cohort_tests")
+    assert {"metab.scfa", "metab.lipids"} <= set(t["layer"])
+    b = t[(t["layer"] == "metab.scfa") & (t["feature"] == "butyrate") & t["comparison"].str.startswith("case_a vs")]
+    assert len(b) and b["effect"].iloc[0] > 0.8 and b["p"].iloc[0] < 0.01
+    assert set(t[t["layer"] == "metab.lipids"]["name"]) >= {"PC(30:1)", "PC(39:1)"}
+    mo = read_table(str(out), "cohort_models")
+    m = mo[(mo["layer"] == "metab.scfa") & (mo["feature"] == "butyrate") & (mo["term"] == "group: case_a vs control")]
+    assert len(m) and 1.3 < m["estimate"].iloc[0] < 2.7                # log2(4) = 2
+    pm = read_table(str(out), "cohort_permanova")
+    assert "metab.lipids" in set(pm["layer"])
+    st = read_manifest(str(out))["cohort"]["layers"]
+    assert st["metab.scfa"]["label"] == "Metabolomics: Short-chain fatty acids" and st["metab.lipids"]["samples"] == 29
+    try:
+        import dash  # noqa: F401
+    except ImportError:
+        return
+    from impexplorer.app import create_app
+    from impexplorer.app.pages import cohort as cpage, overview, search
+    from impexplorer.app.pages import metabolomics as mpage
+    app = create_app(str(out))
+    assert "Metabolomics" in [p.name for p in app._imp_pages]
+    d = app._imp_data
+    for p in app._imp_pages:
+        assert p.layout(d) is not None
+    x, unit = cpage.feature_values(d, "metab.lipids", "L01@5.3")
+    assert len(x) == 29 and "normalised area" in unit
+    assert cpage.feature_box(d, "metab.scfa", "butyrate") is not None
+    hits = search.find(d, "butyr")
+    assert (hits["layer"] == "metabolomics").any()
+    h = hits[hits["layer"] == "metabolomics"].iloc[0]
+    ser = search.series_for(d, h["layer"], h["kind"], h["name"], d.samples, h["fid"])
+    assert len(ser["scfa"]) == 30
+    assert overview.metab_tiles(d) is not None and "metab scfa" in overview.sample_table(d).columns
+    assert len(mpage.features(d, "lipids", "known")) == 6
+    M = mpage.profile_matrix(d, "kraken.genus.mg", list(d.samples["sample_id"]))
+    r = mpage.spearman_all(M.iloc[:, 0], M)
+    assert abs(r.iloc[0] - 1) < 1e-9

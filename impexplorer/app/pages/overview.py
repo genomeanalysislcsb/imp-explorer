@@ -1,4 +1,5 @@
 """Overview: what is in the release, samples with their metadata and key numbers."""
+import pandas as pd
 import plotly.graph_objects as go
 from dash import Input, Output, html
 
@@ -36,6 +37,24 @@ def srna_tiles(data):
     return html.Div(tiles, className="tiles")
 
 
+def metab_tiles(data):
+    """key numbers of the metabolomics assays (imp-explorer metabolomics)"""
+    if not data.has("metab_assays"):
+        return None
+    a = data.q("SELECT * FROM metab_assays")
+    ids = set(data.q("SELECT DISTINCT sample_id FROM metab_values")["sample_id"].astype(str))
+    inrel = len(ids & set(data.samples["sample_id"].astype(str)))
+    nf = int(pd.to_numeric(a.get("n_features"), errors="coerce").fillna(0).sum()) if "n_features" in a else 0
+    tiles = [stat_tile(fmt_int(len(ids)), "metabolomics samples (%s in this release)" % fmt_int(inrel)),
+             stat_tile(fmt_int(len(a)), "assays: " + ", ".join(a["assay"].astype(str))),
+             stat_tile(fmt_int(nf), "features measured")]
+    if data.has("metab_features") and "annotation" in data.q("SELECT * FROM metab_features LIMIT 1").columns:
+        n = data.q("SELECT count(*) AS n FROM metab_features WHERE NOT (lower(coalesce(annotation, '')) LIKE "
+                   "'unknown%' OR lower(coalesce(annotation, '')) LIKE 'name from mass%')")["n"].iloc[0]
+        tiles.append(stat_tile(fmt_int(n), "identified features"))
+    return html.Div(tiles, className="tiles")
+
+
 def sample_table(data):
     q = data.q("SELECT sample_id, omic, metric, value FROM qc") if data.has("qc") else None
     s = data.samples.drop(columns=[c for c in ("imp_dir",) if c in data.samples.columns]).copy()
@@ -53,6 +72,11 @@ def sample_table(data):
         for o in sorted(lib["omic"].unique()):
             have = set(lib.loc[lib["omic"] == o, "sample_id"].astype(str))
             s[fr.get(o, o)] = s["sample_id"].astype(str).map(lambda x: "yes" if x in have else "")
+    if data.has("metab_values"):
+        m = data.q("SELECT DISTINCT sample_id, assay FROM metab_values")
+        for assay in sorted(m["assay"].unique()):
+            have = set(m.loc[m["assay"] == assay, "sample_id"].astype(str))
+            s["metab " + assay] = s["sample_id"].astype(str).map(lambda x: "yes" if x in have else "")
     return s
 
 
@@ -75,6 +99,7 @@ def layout(data):
         stat_tile(fmt_int(nk), "KEGG orthologs"),
     ], className="tiles")
     srna = srna_tiles(data)
+    metab = metab_tiles(data)
     return html.Div([
         html.H2("Overview"),
         html.P("Release %s of %s, exported %s from %s. Use 'group by' and 'filter' in the top bar; every page "
@@ -83,6 +108,8 @@ def layout(data):
         tiles,
         *([html.Div("Small RNA (sRNA-IMP)", className="tile-label", style={"margin": "4px 0 6px"}), srna]
           if srna is not None else []),
+        *([html.Div("Metabolomics", className="tile-label", style={"margin": "4px 0 6px"}), metab]
+          if metab is not None else []),
         html.Div([card("Samples per group", graph("ov-groups")),
                   card("MAGs per sample", graph("ov-mags"), note="high (≥ 90 % complete, ≤ 5 % contamination) and "
                        "medium quality (≥ 50 %, ≤ 10 %) bins of each sample, MIMAG tiers")],

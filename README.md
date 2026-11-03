@@ -6,7 +6,7 @@
 **Documentation: <https://genomeanalysislcsb.github.io/imp-explorer/>**
 
 Interactive exploration of [IMP3](https://gitlab.com/uniluxembourg/lcsb/systems-ecology/imp/imp3) results
-(metagenomics + metatranscriptomics), with sRNA-IMP results as an optional layer. Stand-alone tool, and the core of
+(metagenomics + metatranscriptomics), with sRNA-IMP and metabolomics results as optional layers. Stand-alone tool, and the core of
 study portals that add their own layers and pages.
 
 Two steps, plus an optional cohort analysis:
@@ -37,6 +37,8 @@ imp-explorer cohort --data /path/to/release_v0.1 --config study.cohort.yaml
 
 # optional: small-RNA results of sRNA-IMP (its Cohort folder) as an extra layer
 imp-explorer srna --data /path/to/release_v0.1 --srna-cohort /path/to/srna_outdir/Cohort
+# optional: metabolomics (generic assay / feature / value tables) as an extra layer
+imp-explorer metabolomics --data /path/to/release_v0.1 --metab /path/to/metabolomics_export
 
 imp-explorer run --data /path/to/release_v0.1
 ```

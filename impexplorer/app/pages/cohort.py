@@ -35,8 +35,21 @@ def layer_label(data, key):
     return key
 
 
+def is_metab(layer):
+    return str(layer).startswith("metab.")
+
+
+def metab_units(data, assay):
+    a = data.manifest.get("metabolomics", {}).get("assays", {}).get(assay, {})
+    u = a.get("units") or ""
+    vt = a.get("value_type") or "value"
+    return vt + ("" if not u or u.startswith(("not stated", "relative", "ratio")) else " (%s)" % u)
+
+
 def layer_db(key):
     p = key.split(".")
+    if is_metab(key):
+        return None
     if is_srna(key):
         s = p[1] if len(p) > 1 else ""
         if s in ("genus", "family", "species"):
@@ -93,6 +106,9 @@ def feature_values(data, layer, feature):
                    [frac, st, feature])
         return d.set_index("sample_id")["v"], "share of the %s reads (%s)" % (
             {"mirna": "human miRNA", "rna_class": "non-human"}.get(st, st.replace("fn_", "")), frac)
+    if is_metab(layer):
+        d = data.q("SELECT sample_id, value AS v FROM metab_values WHERE assay=? AND feature_id=?", [p[1], feature])
+        return d.set_index("sample_id")["v"].astype(float), metab_units(data, p[1])
     if layer == "metrics":
         d = data.q("SELECT * FROM cohort_samples")
         if feature not in d.columns:
@@ -139,7 +155,7 @@ def feature_box(data, layer, feature, subtitle=""):
     lab, cmap = cells(data)
     v = v.reindex(lab.index)
     plain = layer.startswith(("metrics", "ratio")) or layer.endswith(".metrics")
-    if not plain:
+    if not plain and not is_metab(layer):
         v = v.fillna(0)
     pos = v[v > 0]
     log = not plain and len(pos) > 3 and (
@@ -148,6 +164,8 @@ def feature_box(data, layer, feature, subtitle=""):
     name = ytitle if layer == "metrics" else feature
     if is_srna(layer):
         v = v.dropna() if plain else v   # samples without this sRNA library are not 0
+    if is_metab(layer):
+        v = v.dropna()                   # samples not measured in this assay are not 0
     return box_by_group(v, lab, cmap, ytitle + (", 0 at the bottom line" if log else ""), log=log, pseudo=pseudo,
                         title="%s · %s%s" % (name, layer_label(data, layer), subtitle), height=420)
 
@@ -239,7 +257,7 @@ def tab_beta(data):
         html.Div([control("layer", dd("co-b-layer", [{"label": layer_label(data, k), "value": k} for k in lays],
                                       lays[0] if lays else None)),
                   control("method", dd("co-b-method", ["PCoA", "NMDS"], "PCoA"))], className="controls"),
-        html.Div([card("Ordination (Bray-Curtis)", graph("co-b-ord")),
+        html.Div([card("Ordination", graph("co-b-ord"), note="Bray-Curtis; metabolomics layers: Euclidean of autoscaled log2 values"),
                   html.Div([card("PERMANOVA", html.Div(id="co-b-perm")),
                             card("Dispersion", html.Div(id="co-b-disp"), note="distance to the own centroid; "
                                  "ratio > 1: first group more variable")])], className="grid g2"),

@@ -13,6 +13,7 @@ COHORT_TABLES = ("cohort_models", "cohort_models_overview", "cohort_tests", "coh
                  "cohort_mag_prevalence")     # written by 'imp-explorer cohort'; optional
 SRNA_TABLES = ("srna_samples", "srna_qc", "srna_features", "srna_tests", "srna_models", "srna_models_overview",
                "srna_permanova", "srna_dispersion", "srna_ordination", "srna_covariates")   # 'imp-explorer srna'
+METAB_TABLES = ("metab_assays", "metab_features", "metab_values", "metab_samples")    # 'imp-explorer metabolomics'
 # views over the cohort results of IMP3 and of sRNA-IMP (same columns where they mean the same)
 UNION_VIEWS = {"all_tests": ("cohort_tests", "srna_tests"), "all_models": ("cohort_models", "srna_models"),
                "all_models_overview": ("cohort_models_overview", "srna_models_overview"),
@@ -29,7 +30,7 @@ class Data:
         self.study = self.manifest.get("study") or os.path.basename(self.release)
         self._local = threading.local()
         self.tables = {}
-        for name in tuple(CORE_TABLES) + COHORT_TABLES + SRNA_TABLES + tuple(extra_tables):
+        for name in tuple(CORE_TABLES) + COHORT_TABLES + SRNA_TABLES + METAB_TABLES + tuple(extra_tables):
             p = table_path(self.release, name)
             if p:
                 self.tables[name] = p

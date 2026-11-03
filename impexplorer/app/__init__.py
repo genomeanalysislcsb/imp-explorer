@@ -20,8 +20,9 @@ def nav_id(path):
 
 
 def core_pages():
-    from .pages import cohort, functions, mags, overview, qc, search, srna, taxonomy
-    return [overview.PAGE, qc.PAGE, taxonomy.PAGE, mags.PAGE, functions.PAGE, srna.PAGE, search.PAGE, cohort.PAGE]
+    from .pages import cohort, functions, mags, metabolomics, overview, qc, search, srna, taxonomy
+    return [overview.PAGE, qc.PAGE, taxonomy.PAGE, mags.PAGE, functions.PAGE, srna.PAGE, metabolomics.PAGE,
+            search.PAGE, cohort.PAGE]
 
 
 def plugin_pages(modules=()):

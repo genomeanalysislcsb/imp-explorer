@@ -13,7 +13,7 @@ import time
 import pandas as pd
 
 from .. import __version__
-from ..release import read_manifest, write_table
+from ..release import read_manifest, table_path, write_table
 from . import settings
 from .data import Cohort, METRIC_LABEL
 from .engine import Analysis
@@ -34,7 +34,7 @@ def write_outputs(C, A, res, a):
     meta.drop(columns=[c for c in ("imp_dir",) if c in meta.columns]).to_csv(
         os.path.join(tdir, "cohort.metadata.tsv"), sep="\t")
     for key, L in C.layers.items():
-        L.M.T.to_csv(os.path.join(tdir, "cohort.%s.%s.tsv" % (key, "counts" if L.kind == "counts" else "log2ratio")),
+        L.M.T.to_csv(os.path.join(tdir, "cohort.%s.%s.tsv" % (key, {"counts": "counts", "metab": "values"}.get(L.kind, "log2ratio"))),
                      sep="\t", float_format="%.6g")
     for name, df in res.items():
         if isinstance(df, pd.DataFrame):
@@ -71,6 +71,8 @@ def main(argv=None):
     C = Cohort(a)
     C.note("%d samples, %d kept; groups %s (reference %s); block %s" % (
         len(C.samples), len(C.kept), ",".join(C.groups) or "–", C.ref or "–", C.block or "–"))
+    if a.layers == settings.DEFAULT_LAYERS and table_path(a.data, "metab_values"):
+        a.layers += ",metab"                  # metabolomics of the release (imp-explorer metabolomics): every assay
     C.load_layers(a.layers)
     C.note("layers: " + ", ".join("%s (%d x %d)" % (k, L.M.shape[0], L.M.shape[1]) for k, L in C.layers.items()))
     A = Analysis(C)

@@ -112,6 +112,15 @@ def ordination(M, groups, cmap, title="PCoA (Bray-Curtis)", height=430):
 
 
 def grid(id_, df, height=380, number_cols=(), page_size=None, fit=False):
+    cols = column_defs(df, number_cols, fit)
+    return dag.AgGrid(id=id_, rowData=df.to_dict("records"), columnDefs=cols, className="ag-theme-alpine",
+                      columnSize="responsiveSizeToFit" if fit else "autoSize", style={"height": height},
+                      dashGridOptions={"rowSelection": "single", "pagination": bool(page_size),
+                                       "paginationPageSize": page_size or 100, "animateRows": False})
+
+
+def column_defs(df, number_cols=(), fit=False):
+    """AG Grid column definitions (number format, link column, widths); also for callbacks that change the columns"""
     cols = []
     for c in df.columns:
         d = {"field": c, "headerName": c, "filter": True, "sortable": True, "resizable": True}
@@ -127,10 +136,7 @@ def grid(id_, df, height=380, number_cols=(), page_size=None, fit=False):
             d["flex"] = 2
             d["minWidth"] = 160
         cols.append(d)
-    return dag.AgGrid(id=id_, rowData=df.to_dict("records"), columnDefs=cols, className="ag-theme-alpine",
-                      columnSize="responsiveSizeToFit" if fit else "autoSize", style={"height": height},
-                      dashGridOptions={"rowSelection": "single", "pagination": bool(page_size),
-                                       "paginationPageSize": page_size or 100, "animateRows": False})
+    return cols
 
 
 # ----------------------------------------------------------------------------- clustered heatmap

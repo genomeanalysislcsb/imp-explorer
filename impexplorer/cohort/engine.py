@@ -5,7 +5,8 @@ import numpy as np
 import pandas as pd
 
 from .data import METRIC_LABEL
-from .stats import (TERM_NAMES, bh, bray_curtis, chi2_test, clr, design_matrix, design_ok, kruskal, mannwhitney,
+from .stats import (TERM_NAMES, bh, bray_curtis, chi2_test, clr, design_matrix, design_ok, euclidean_z, kruskal,
+                    log_values, mannwhitney,
                     nmds, ols_hc3, pcoa, permanova, permanova_partial, van_elteren, isolated_samples)
 
 MIN_N = 3          # samples per side for a comparison
@@ -192,7 +193,9 @@ class Analysis:
             V = L.rel()[f] if L.kind == "counts" else L.M[f]
             t = self.test_matrix(V, list(V.index), key)
             t["mean"] = t["feature"].map(V.mean())
-            t["prevalence"] = t["feature"].map((L.M[f] > 0).mean()) if L.kind == "counts" else np.nan
+            t["prevalence"] = t["feature"].map((L.M[f] > 0).mean()) if L.kind in ("counts", "metab") else np.nan
+            if L.kind == "metab":
+                t["name"] = t["feature"].map(getattr(L, "names", {})).fillna("")
             parts.append(t)
             self.timing["tests " + key] = time.time() - t0
         self.res["feature_tests"] = pd.concat(parts, ignore_index=True) if parts else pd.DataFrame()
@@ -204,12 +207,13 @@ class Analysis:
         nmds_layers = {k.strip() for k in (self.a.nmds or "").split(",") if k.strip()}
         P = self.a.permutations
         for key, L in C.layers.items():
-            if L.kind != "counts":
+            if L.kind not in ("counts", "metab"):
                 continue
             t0 = time.time()
             R = L.rel()
             ss = list(R.index)
-            D = bray_curtis(R.values)
+            # counts: Bray-Curtis of relative abundances; metabolomics: Euclidean of autoscaled log values
+            D = bray_curtis(R.values) if L.kind == "counts" else euclidean_z(R[L.tested(self.a.prevalence) or list(R.columns)].values)
             pos = {s: i for i, s in enumerate(ss)}
             X, expl = pcoa(D, 2)
             o = pd.DataFrame({"layer": key, "sample_id": ss, "axis1": X[:, 0], "axis2": X[:, 1], "method": "PCoA",
@@ -379,6 +383,13 @@ class Analysis:
                     if len(feats) < 2:
                         continue
                     Y = clr(sub[feats].values)
+                elif L.kind == "metab":
+                    sub = L.M.loc[keys]
+                    keepf = ((sub > 0).mean(axis=0) >= self.a.prevalence) & (sub.std(axis=0) > 0)
+                    feats = list(sub.columns[keepf])
+                    if len(feats) < 2:
+                        continue
+                    Y = log_values(sub[feats].values)          # log2 units
                 else:
                     feats = list(L.M.columns)
                     Y = L.M.loc[keys, feats].values
@@ -404,6 +415,10 @@ class Analysis:
         df["name"] = [METRIC_LABEL.get(f, "") if l == "metrics" else
                       TERM_NAMES.get(f, TERM_NAMES.get(str(f).replace("ko", "map", 1), ""))
                       for l, f in zip(df["layer"], df["feature"])]
+        for key, L in C.layers.items():
+            if L.kind == "metab" and getattr(L, "names", None):
+                i = df["layer"] == key
+                df.loc[i, "name"] = df.loc[i, "feature"].map(L.names).fillna("")
         df = df.sort_values(["model", "layer", "term", "p"])
         self.res["models"] = df
         self.res["models_overview"] = pd.DataFrame(over, columns=["model", "formula", "note", "layer", "n",

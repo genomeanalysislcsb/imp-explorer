@@ -57,7 +57,8 @@ EXPLAIN = {
     "beta":
         "Bray-Curtis PCoA of the relative abundances (colour: group, marker: block). PERMANOVA: all groups with "
         "permutations within blocks; group after block and block after group (partial R²); every comparison within its "
-        "blocks; the block contrast within the reference group.",
+        "blocks; the block contrast within the reference group. Metabolomics layers: Euclidean distances of the "
+        "autoscaled log2 values instead of Bray-Curtis.",
     "nmds":
         "Non-metric MDS (Kruskal) of the Bray-Curtis distances, best of a PCoA and five random starts; stress below "
         "0.2 is a usable 2-D picture. Samples far from all others are left out of the NMDS (they collapse the rest).",
@@ -312,7 +313,7 @@ class Report:
             items.append(("fig", fig))
         t = pm.copy()
         t["layer"] = t["layer"].map(self.label)
-        items.append(("table", "PERMANOVA (Bray-Curtis, %d permutations)" % self.st["permutations"], t))
+        items.append(("table", "PERMANOVA (Bray-Curtis; metabolomics: Euclidean of autoscaled log2 values; %d permutations)" % self.st["permutations"], t))
         self.add("beta", "Beta diversity", *items)
         o = self.res["ordination"]
         nm = [k for k in self.C.layers if ((o["method"] == "NMDS") & (o["layer"] == k)).any()] if len(o) else []

@@ -37,7 +37,8 @@ def norm_id(x):
 
 
 class Layer:
-    """one feature set: counts (samples x features) or, for ratio layers, values (CLR mt - CLR mg)"""
+    """one feature set: counts (samples x features), for ratio layers values (CLR mt - CLR mg), for metabolomics
+    (metab) the measured values (concentrations / normalised intensities; >= 0, 0 = not detected)"""
 
     def __init__(self, key, label, omic, kind, M, db=None):
         self.key, self.label, self.omic, self.kind, self.M, self.db = key, label, omic, kind, M, db
@@ -48,7 +49,11 @@ class Layer:
         return self.M.div(self.M.sum(axis=1).replace(0, np.nan), axis=0).fillna(0)
 
     def tested(self, prevalence, min_reads=10):
-        """features with >= min_reads in >= prevalence of the samples (counts), all features (ratio)"""
+        """features with >= min_reads in >= prevalence of the samples (counts), detected (> 0) in >= prevalence of
+        the samples and not constant (metab), all features (ratio)"""
+        if self.kind == "metab":
+            ok = ((self.M > 0).mean(axis=0) >= prevalence) & (self.M.std(axis=0) > 0)
+            return list(self.M.columns[ok])
         if self.kind != "counts":
             return list(self.M.columns)
         return list(self.M.columns[(self.M >= min_reads).mean(axis=0) >= prevalence])
@@ -253,10 +258,13 @@ class Cohort:
     # ------------------------------------------------------------------ layers
     def load_layers(self, keys):
         tax = fun = ba = bins = None
+        keys = self.expand_metab(keys)
         for key in [k.strip() for k in keys.split(",") if k.strip()]:
             parts = key.split(".")
             try:
-                if parts[0] in ("kraken", "motus"):
+                if parts[0] == "metab":
+                    self.metab_layer(key, parts[1])
+                elif parts[0] in ("kraken", "motus"):
                     if tax is None:
                         tax = read_table(self.release, "taxonomy")
                     src = "kraken2_bracken" if parts[0] == "kraken" else "motus"
@@ -302,6 +310,55 @@ class Cohort:
                 self.layers[key] = Layer(key, "mt/mg ratio, %s" % mg.label.rsplit(",", 1)[0], "mt/mg", "ratio", Y,
                                          db=mg.db)
         self.add_alpha()
+
+    # ------------------------------------------------------------------ metabolomics (imp-explorer metabolomics)
+    def metab_assays(self):
+        if getattr(self, "_metab_assays", None) is None:
+            a = read_table(self.release, "metab_assays")
+            self._metab_assays = a.set_index("assay") if len(a) else pd.DataFrame()
+        return self._metab_assays
+
+    def expand_metab(self, keys):
+        """'metab' = every assay of the release: metab.<assay>,..."""
+        out = []
+        for k in [k.strip() for k in keys.split(",") if k.strip()]:
+            if k in ("metab", "metab.all"):
+                out += ["metab." + x for x in self.metab_assays().index]
+            else:
+                out.append(k)
+        return ",".join(dict.fromkeys(out))
+
+    def metab_layer(self, key, assay):
+        if getattr(self, "_metab_values", None) is None:
+            self._metab_values = read_table(self.release, "metab_values")
+        d = self._metab_values
+        d = d[d["assay"].astype(str) == assay]
+        if d.empty:
+            self.note("layer %s skipped: assay %s not in the release (imp-explorer metabolomics)" % (key, assay))
+            return
+        M = d.pivot_table(index="sample_id", columns="feature_id", values="value", aggfunc="first")
+        M.index = M.index.astype(str)
+        M = M.reindex([s for s in self.kept if s in M.index])
+        # missing values: features missing in > 20 % of the samples, then samples with a missing value left out
+        nf = M.shape[1]
+        M = M.loc[:, M.isna().mean() <= 0.2]
+        ns = M.shape[0]
+        M = M.dropna()
+        if M.shape[1] < nf or M.shape[0] < ns:
+            self.note("layer %s: %d features (missing in > 20 %% of the samples) and %d samples (a missing value) "
+                      "left out" % (key, nf - M.shape[1], ns - M.shape[0]))
+        if (M < 0).any().any():
+            self.note("layer %s: negative values (already log-transformed?) - analysed as they are" % key)
+        if M.shape[0] < 6 or M.shape[1] < 2:
+            self.note("layer %s skipped: %d samples, %d features" % (key, M.shape[0], M.shape[1]))
+            return
+        a = self.metab_assays()
+        lab = a["label"].get(assay, assay) if "label" in a.columns else assay
+        L = Layer(key, "Metabolomics: %s" % lab, "metab", "metab", M.astype(float), db="metab")
+        f = read_table(self.release, "metab_features")
+        f = f[f["assay"].astype(str) == assay] if len(f) else f
+        L.names = dict(zip(f["feature_id"].astype(str), f["name"].astype(str))) if len(f) and "name" in f else {}
+        self.layers[key] = L
 
     def _old_motus(self, tax, omic):
         """mOTUs of releases exported before imp-explorer 0.1.1: every row has rank 'motu' and the full lineage as

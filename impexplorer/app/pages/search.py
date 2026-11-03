@@ -33,6 +33,12 @@ def find(data, text, limit=200):
             "SELECT 'sRNA' AS layer, 'sRNA · ' || omic || ' · ' || \"set\" AS kind, feature AS name, "
             "count(DISTINCT sample_id) AS samples, round(100 * avg(rel), 4) AS mean_pct FROM srna_features "
             "WHERE lower(feature) LIKE ? GROUP BY 1, 2, 3", [like]))
+    if data.has("metab_features"):
+        parts.append(data.q(
+            "SELECT 'metabolomics' AS layer, 'metabolomics · ' || f.assay AS kind, f.name AS name, "
+            "count(DISTINCT v.sample_id) AS samples, NULL AS mean_pct, f.feature_id AS fid FROM metab_features f "
+            "JOIN metab_values v ON v.assay = f.assay AND v.feature_id = f.feature_id AND v.value > 0 "
+            "WHERE lower(f.name) LIKE ? OR lower(f.feature_id) LIKE ? GROUP BY 1, 2, 3, 6", [like, like]))
     d = pd.concat([p for p in parts if len(p)], ignore_index=True) if any(len(p) for p in parts) else pd.DataFrame()
     if not len(d):
         return d
@@ -48,13 +54,17 @@ def find(data, text, limit=200):
                 md(st[3:], n) if st.startswith("fn_kegg") else "")
         return ""
     d["link"] = [link(L, k, n) for L, k, n in zip(d["layer"], d["kind"], d["name"])]
-    return d[COLS]
+    if "fid" not in d.columns:
+        d["fid"] = None
+    return d[COLS + ["fid"]]
 
 
-def series_for(data, layer, kind, name, samples):
+def series_for(data, layer, kind, name, samples, fid=None):
     """{label: Series(sample_id -> % value)} for every layer where the name occurs (same rank)"""
     ids = list(samples["sample_id"])
     out = {}
+    if layer == "metabolomics":               # values of the assay (own units), not % of reads
+        return metab_series(data, kind.split(" · ")[-1], fid or name, ids)
     if layer == "sRNA":                       # an sRNA hit: its IMP3 counterpart (same rank / KEGG database) too
         st = kind.split(" · ")[-1]
         if st in ("genus", "family", "species"):
@@ -91,6 +101,12 @@ def series_for(data, layer, kind, name, samples):
     return out
 
 
+def metab_series(data, assay, fid, ids):
+    d = data.q("SELECT sample_id, value FROM metab_values WHERE assay = ? AND feature_id = ?", [assay, fid])
+    v = d.set_index("sample_id")["value"].astype(float)
+    return {assay: v.reindex([i for i in ids if i in v.index])}
+
+
 def srna_series(data, st, name, ids):
     """sRNA shares of one feature in every sRNA fraction (only the libraries of that fraction)"""
     if not data.has("srna_features"):
@@ -111,7 +127,7 @@ def layout(data):
     return html.Div([
         html.H2("Search across layers"),
         html.P("Type part of a taxon name (any rank, Kraken2 / mOTUs / GTDB of the MAGs / sRNA), a functional term "
-               "(KO, module, pathway, CAZyme, EC) or a human miRNA. Pick a hit to see it in every layer where it occurs.",
+               "(KO, module, pathway, CAZyme, EC), a human miRNA or a metabolite. Pick a hit to see it in every layer where it occurs.",
                className="lead"),
         dcc.Input(id="se-text", type="text", placeholder="e.g. Akkermansia, K00873, GH13 ...", debounce=True,
                   style={"width": "420px", "padding": "8px 10px", "border": "1px solid #cbd2d9",
@@ -140,7 +156,7 @@ def register(app, data):
             return empty_fig("pick a hit")
         r = rows[0]
         s, g, cmap = selection(data, group, fcol, fval)
-        ser = series_for(data, r["layer"], r["kind"], r["name"], s)
+        ser = series_for(data, r["layer"], r["kind"], r["name"], s, r.get("fid"))
         if not ser:
             return empty_fig()
         fig = go.Figure()
@@ -156,7 +172,12 @@ def register(app, data):
                                      text=list(x.index), hovertemplate="%{text}<br>%{y:.3g} %<extra>" + lab +
                                      "</extra>"))
         fig.update_layout(boxmode="group", title="%s (%s)" % (r["name"], r["kind"]))
-        fig.update_yaxes(title="% of reads of the layer")
+        if r["layer"] == "metabolomics":
+            from .cohort import metab_units
+            fig.update_yaxes(title=metab_units(data, r["kind"].split(" · ")[-1]))
+            fig.update_traces(hovertemplate="%{text}<br>%{y:.4g}<extra></extra>")
+        else:
+            fig.update_yaxes(title="% of reads of the layer")
         return style(fig, 480)
 
 
