@@ -14,7 +14,11 @@ ANNOT = [{"label": "all features", "value": "all"}, {"label": "identified only",
 WEAK = ("unknown", "name from mass")          # annotation levels left out by 'identified only'
 PROFILES = [("kraken.genus.mg", "Kraken2 genera, metagenome"), ("kraken.genus.mt", "Kraken2 genera, metatranscriptome"),
             ("mag.genus.mg", "MAG genera (GTDB), metagenome"), ("kegg_module.mg", "KEGG modules, metagenome"),
-            ("kegg_module.mt", "KEGG modules, metatranscriptome")]
+            ("kegg_module.mt", "KEGG modules, metatranscriptome"),
+            ("prot.genus.mp_extra", "genera, metaproteome extracellular"),
+            ("prot.genus.mp_intra", "genera, metaproteome intracellular"),
+            ("prot.kegg_module.mp_extra", "KEGG modules, metaproteome extracellular"),
+            ("prot.kegg_module.mp_intra", "KEGG modules, metaproteome intracellular")]
 
 
 def assays(data):
@@ -49,7 +53,16 @@ def groups(data, group, fcol, fval, assay):
 def profile_matrix(data, key, ids):
     """samples x features (relative abundance) of an IMP3 profile, features in >= 10 % of the samples"""
     p = key.split(".")
-    if p[0] == "kraken" and data.has("taxonomy"):
+    if p[0] == "prot":
+        if p[1] == "genus" and data.has("prot_taxonomy"):
+            d = data.q("SELECT sample_id, taxon AS f, rel AS v FROM prot_taxonomy WHERE rank=? AND omic=? AND "
+                       "sample_id IN (SELECT UNNEST(?::VARCHAR[]))", [p[1], p[2], list(ids)])
+        elif data.has("prot_functions"):
+            d = data.q("SELECT sample_id, feature AS f, rel AS v FROM prot_functions WHERE db=? AND omic=? AND "
+                       "sample_id IN (SELECT UNNEST(?::VARCHAR[]))", [p[1], p[2], list(ids)])
+        else:
+            return pd.DataFrame()
+    elif p[0] == "kraken" and data.has("taxonomy"):
         d = data.q("SELECT sample_id, taxon AS f, rel_abundance AS v FROM taxonomy WHERE source='kraken2_bracken' "
                    "AND rank=? AND omic=? AND sample_id IN (SELECT UNNEST(?::VARCHAR[]))", [p[1], p[2], list(ids)])
     elif p[0] == "mag" and data.has("bin_abundance"):
@@ -86,7 +99,8 @@ def layout(data):
     a0 = opts[0]["value"] if opts else None
     prof = [{"label": lab, "value": k} for k, lab in PROFILES
             if (k.startswith("kraken") and data.has("taxonomy")) or (k.startswith("mag") and data.has("bins"))
-            or (k.startswith("kegg") and data.has("functions"))]
+            or (k.startswith("kegg") and data.has("functions"))
+            or (k.startswith("prot.") and data.has("prot_samples") and k.split(".")[2] in data.distinct("prot_samples", "omic"))]
     man = data.manifest.get("metabolomics", {}).get("assays", {})
     rows = [html.Li("%s: %s · %s · %s, acquired %s; %s%s" % (
         a, m.get("label") or a, m.get("platform") or "", m.get("matrix") or "", m.get("acquisition_date") or "?",

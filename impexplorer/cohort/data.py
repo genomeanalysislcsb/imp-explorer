@@ -44,13 +44,15 @@ class Layer:
         self.key, self.label, self.omic, self.kind, self.M, self.db = key, label, omic, kind, M, db
 
     def rel(self):
-        if self.kind != "counts":
+        if self.kind not in ("counts", "auc"):
             return self.M
         return self.M.div(self.M.sum(axis=1).replace(0, np.nan), axis=0).fillna(0)
 
     def tested(self, prevalence, min_reads=10):
         """features with >= min_reads in >= prevalence of the samples (counts), detected (> 0) in >= prevalence of
         the samples and not constant (metab), all features (ratio)"""
+        if self.kind == "auc":                                   # proteins: detected in >= prevalence
+            return list(self.M.columns[(self.M > 0).mean(axis=0) >= prevalence])
         if self.kind == "metab":
             ok = ((self.M > 0).mean(axis=0) >= prevalence) & (self.M.std(axis=0) > 0)
             return list(self.M.columns[ok])
@@ -264,6 +266,8 @@ class Cohort:
             try:
                 if parts[0] == "metab":
                     self.metab_layer(key, parts[1])
+                elif parts[0] == "prot":
+                    self.prot_layer(key, parts[1], parts[2])
                 elif parts[0] in ("kraken", "motus"):
                     if tax is None:
                         tax = read_table(self.release, "taxonomy")
@@ -319,14 +323,50 @@ class Cohort:
         return self._metab_assays
 
     def expand_metab(self, keys):
-        """'metab' = every assay of the release: metab.<assay>,..."""
+        """'metab' = every assay of the release: metab.<assay>,...; 'prot' = the default protein layers
+        (genus, KEGG KO / module / pathway of every fraction)"""
         out = []
         for k in [k.strip() for k in keys.split(",") if k.strip()]:
             if k in ("metab", "metab.all"):
                 out += ["metab." + x for x in self.metab_assays().index]
+            elif k in ("prot", "prot.all"):
+                s = read_table(self.release, "prot_samples")
+                fr = sorted({str(o)[3:] for o in s["omic"]}) if len(s) else []
+                out += ["prot.%s.%s" % (x, f) for x in ("genus", "kegg_module", "kegg_pathway", "kegg_ko") for f in fr]
             else:
                 out.append(k)
         return ",".join(dict.fromkeys(out))
+
+    def prot_layer(self, key, what, fraction):
+        """metaproteomics (imp-explorer proteomics): AUC per taxon (rank) or KEGG term of one fraction"""
+        omic = "mp_" + fraction
+        if what in ("domain", "phylum", "class", "order", "family", "genus", "species"):
+            if getattr(self, "_prot_tax", None) is None:
+                self._prot_tax = read_table(self.release, "prot_taxonomy")
+            d = self._prot_tax
+            d = d[(d["rank"] == what) & (d["omic"] == omic)] if len(d) else d
+            col, lab = "taxon", what
+        else:
+            if getattr(self, "_prot_fun", None) is None:
+                self._prot_fun = read_table(self.release, "prot_functions")
+            d = self._prot_fun
+            d = d[(d["db"] == what) & (d["omic"] == omic)] if len(d) else d
+            if what == "kegg_pathway" and len(d):
+                d = d[~d["feature"].str.match(GLOBAL_MAPS)]
+            col, lab = "feature", LAYER_LABEL.get(what, what)
+        if d.empty:
+            self.note("layer %s skipped: no %s of %s in the release (imp-explorer proteomics)" % (key, what, omic))
+            return
+        M = d.pivot_table(index="sample_id", columns=col, values="auc", aggfunc="sum", fill_value=0)
+        M.index = M.index.astype(str)
+        M = M.reindex([s for s in self.kept if s in M.index]).fillna(0)
+        M = M.loc[M.sum(axis=1) > 0, M.sum(axis=0) > 0]
+        if M.shape[0] < 6 or M.shape[1] < 2:
+            self.note("layer %s skipped: %d samples, %d features" % (key, M.shape[0], M.shape[1]))
+            return
+        frac = {"extra": "extracellular", "intra": "intracellular"}.get(fraction, fraction)
+        self.layers[key] = Layer(key, "Metaproteome %s, %s" % (frac, lab), omic, "auc", M.astype(float),
+                                 db=None if col == "taxon" else what)
 
     def metab_layer(self, key, assay):
         if getattr(self, "_metab_values", None) is None:

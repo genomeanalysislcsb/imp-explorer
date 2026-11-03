@@ -93,6 +93,13 @@ Kraken2 mg and mt, mOTUs mg and mt, and the MAGs mg and mt.
 Shown when the release contains sRNA results ([`imp-explorer srna`](srna.md)): composition of any sRNA feature set,
 library QC, RNA classes by group, and one feature next to the metagenome and metatranscriptome of the same samples.
 
+## Proteomics
+
+Shown when the release contains metaproteomics ([`imp-explorer proteomics`](proteomics.md)): library QC by group,
+the genera behind the protein abundance of a KEGG term, a genus's main KEGG terms, and the proteins of a term. The
+protein profiles are also omics `mp_<fraction>` on the Taxonomy page (with an *Across omics* panel: one taxon in mg,
+mt and the protein fractions) and on the Functions page (a term in mg, mt and the protein fractions).
+
 ## Metabolomics
 
 Shown when the release contains metabolomics results ([`imp-explorer metabolomics`](metabolomics.md)): profiles of

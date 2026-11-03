@@ -37,6 +37,26 @@ def srna_tiles(data):
     return html.Div(tiles, className="tiles")
 
 
+def prot_tiles(data):
+    """key numbers of the metaproteomics (imp-explorer proteomics)"""
+    if not data.has("prot_samples"):
+        return None
+    s = data.q("SELECT * FROM prot_samples")
+    ids = set(s["sample_id"].astype(str))
+    inrel = len(ids & set(data.samples["sample_id"].astype(str)))
+    per = s.groupby("omic")["sample_id"].nunique()
+    tiles = [stat_tile(fmt_int(len(ids)), "proteomics samples (%s in this release)" % fmt_int(inrel)),
+             stat_tile(" / ".join(fmt_int(n) for n in per.values), "libraries: " + " / ".join(per.index))]
+    if "n_proteins" in s.columns:
+        tiles.append(stat_tile(fmt_int(s["n_proteins"].median()), "proteins per library (median)"))
+    n = data.manifest.get("proteomics", {}).get("proteins")
+    if n:
+        tiles.append(stat_tile(fmt_int(n), "proteins in the catalogue"))
+    g = data.q("SELECT count(DISTINCT taxon) AS n FROM prot_taxonomy WHERE rank='genus'")["n"].iloc[0]
+    tiles.append(stat_tile(fmt_int(g), "genera with proteins"))
+    return html.Div(tiles, className="tiles")
+
+
 def metab_tiles(data):
     """key numbers of the metabolomics assays (imp-explorer metabolomics)"""
     if not data.has("metab_assays"):
@@ -72,6 +92,11 @@ def sample_table(data):
         for o in sorted(lib["omic"].unique()):
             have = set(lib.loc[lib["omic"] == o, "sample_id"].astype(str))
             s[fr.get(o, o)] = s["sample_id"].astype(str).map(lambda x: "yes" if x in have else "")
+    if data.has("prot_samples"):
+        m = data.q("SELECT DISTINCT sample_id, omic FROM prot_samples")
+        for o in sorted(m["omic"].unique()):
+            have = set(m.loc[m["omic"] == o, "sample_id"].astype(str))
+            s["proteins " + o] = s["sample_id"].astype(str).map(lambda x: "yes" if x in have else "")
     if data.has("metab_values"):
         m = data.q("SELECT DISTINCT sample_id, assay FROM metab_values")
         for assay in sorted(m["assay"].unique()):
@@ -84,9 +109,9 @@ def layout(data):
     n = len(data.samples)
     nb = data.q("SELECT quality, count(*) AS n FROM bins GROUP BY 1") if data.has("bins") else None
     tiers = dict(zip(nb["quality"], nb["n"])) if nb is not None else {}
-    ng = data.q("SELECT count(DISTINCT taxon) AS n FROM taxonomy WHERE rank='genus'")["n"].iloc[0] \
+    ng = data.q("SELECT count(DISTINCT taxon) AS n FROM taxonomy WHERE rank='genus' AND omic IN ('mg', 'mt')")["n"].iloc[0] \
         if data.has("taxonomy") else 0
-    nk = data.q("SELECT count(DISTINCT feature) AS n FROM functions WHERE db='kegg_ko'")["n"].iloc[0] \
+    nk = data.q("SELECT count(DISTINCT feature) AS n FROM functions WHERE db='kegg_ko' AND omic IN ('mg', 'mt')")["n"].iloc[0] \
         if data.has("functions") else 0
     man = data.manifest
     tiles = html.Div([
@@ -100,6 +125,7 @@ def layout(data):
     ], className="tiles")
     srna = srna_tiles(data)
     metab = metab_tiles(data)
+    prot = prot_tiles(data)
     return html.Div([
         html.H2("Overview"),
         html.P("Release %s of %s, exported %s from %s. Use 'group by' and 'filter' in the top bar; every page "
@@ -108,6 +134,8 @@ def layout(data):
         tiles,
         *([html.Div("Small RNA (sRNA-IMP)", className="tile-label", style={"margin": "4px 0 6px"}), srna]
           if srna is not None else []),
+        *([html.Div("Metaproteomics", className="tile-label", style={"margin": "4px 0 6px"}), prot]
+          if prot is not None else []),
         *([html.Div("Metabolomics", className="tile-label", style={"margin": "4px 0 6px"}), metab]
           if metab is not None else []),
         html.Div([card("Samples per group", graph("ov-groups")),

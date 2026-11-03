@@ -34,7 +34,7 @@ def write_outputs(C, A, res, a):
     meta.drop(columns=[c for c in ("imp_dir",) if c in meta.columns]).to_csv(
         os.path.join(tdir, "cohort.metadata.tsv"), sep="\t")
     for key, L in C.layers.items():
-        L.M.T.to_csv(os.path.join(tdir, "cohort.%s.%s.tsv" % (key, {"counts": "counts", "metab": "values"}.get(L.kind, "log2ratio"))),
+        L.M.T.to_csv(os.path.join(tdir, "cohort.%s.%s.tsv" % (key, {"counts": "counts", "metab": "values", "auc": "auc"}.get(L.kind, "log2ratio"))),
                      sep="\t", float_format="%.6g")
     for name, df in res.items():
         if isinstance(df, pd.DataFrame):
@@ -71,8 +71,11 @@ def main(argv=None):
     C = Cohort(a)
     C.note("%d samples, %d kept; groups %s (reference %s); block %s" % (
         len(C.samples), len(C.kept), ",".join(C.groups) or "–", C.ref or "–", C.block or "–"))
-    if a.layers == settings.DEFAULT_LAYERS and table_path(a.data, "metab_values"):
+    default = a.layers == settings.DEFAULT_LAYERS
+    if default and table_path(a.data, "metab_values"):
         a.layers += ",metab"                  # metabolomics of the release (imp-explorer metabolomics): every assay
+    if default and table_path(a.data, "prot_samples"):
+        a.layers += ",prot"                   # metaproteomics: genus and KEGG layers of every fraction
     C.load_layers(a.layers)
     C.note("layers: " + ", ".join("%s (%d x %d)" % (k, L.M.shape[0], L.M.shape[1]) for k, L in C.layers.items()))
     A = Analysis(C)

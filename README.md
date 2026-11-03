@@ -6,7 +6,7 @@
 **Documentation: <https://genomeanalysislcsb.github.io/imp-explorer/>**
 
 Interactive exploration of [IMP3](https://gitlab.com/uniluxembourg/lcsb/systems-ecology/imp/imp3) results
-(metagenomics + metatranscriptomics), with sRNA-IMP and metabolomics results as optional layers. Stand-alone tool, and the core of
+(metagenomics + metatranscriptomics), with sRNA-IMP, metaproteomics and metabolomics results as optional layers. Stand-alone tool, and the core of
 study portals that add their own layers and pages.
 
 Two steps, plus an optional cohort analysis:
@@ -37,6 +37,8 @@ imp-explorer cohort --data /path/to/release_v0.1 --config study.cohort.yaml
 
 # optional: small-RNA results of sRNA-IMP (its Cohort folder) as an extra layer
 imp-explorer srna --data /path/to/release_v0.1 --srna-cohort /path/to/srna_outdir/Cohort
+# optional: metaproteomics (taxa / KEGG per fraction, protein catalogue) next to mg and mt
+imp-explorer proteomics --data /path/to/release_v0.1 --prot /path/to/proteomics_export
 # optional: metabolomics (generic assay / feature / value tables) as an extra layer
 imp-explorer metabolomics --data /path/to/release_v0.1 --metab /path/to/metabolomics_export
 
@@ -50,15 +52,16 @@ start it on a node and open it through an SSH tunnel (`ssh -L 8050:<node>:8050 <
 
 | page | what it shows |
 |---|---|
-| Overview | samples per group, MAGs per sample (MIMAG tiers), sample table with metadata and key numbers (plus key numbers of the sRNA and metabolomics layers when present) |
+| Overview | samples per group, MAGs per sample (MIMAG tiers), sample table with metadata and key numbers (plus key numbers of the sRNA, proteomics and metabolomics layers when present) |
 | QC | any QC metric by group (curated metrics first, all IMP3 summary statistics), metric vs metric |
-| Taxonomy | Kraken2/Bracken or mOTUs per omic and rank: composition (stacked bars or clustered heatmap), Bray-Curtis PCoA + PERMANOVA, group tests (Kruskal-Wallis / Mann-Whitney, BH-FDR), one taxon by group and mg vs mt |
+| Taxonomy | Kraken2/Bracken or mOTUs per omic and rank (and the metaproteome, with an across-omics view of one taxon): composition (stacked bars or clustered heatmap), Bray-Curtis PCoA + PERMANOVA, group tests (Kruskal-Wallis / Mann-Whitney, BH-FDR), one taxon by group and mg vs mt |
 | MAGs | CheckM2 quality, GTDB taxonomy of the MAGs, abundance (mg) and activity (mt) of a taxon's MAGs by group, log2(mt/mg) per MAG, MAG catalogue |
-| Functions | KEGG KO / module / pathway, CAZy, EC per omic: clustered heatmap of the most variable terms (rows / samples clustered, CLR or log, site colour bar), group tests, one term by group, expression ratio mt/mg |
-| Search | one name across all layers (Kraken2, mOTUs, MAGs, functions, sRNA, metabolites) by group |
+| Functions | KEGG KO / module / pathway, CAZy, EC per omic (mg, mt and the metaproteome fractions): clustered heatmap of the most variable terms (rows / samples clustered, CLR or log, site colour bar), group tests, one term by group, expression ratio mt/mg |
+| Search | one name across all layers (Kraken2, mOTUs, MAGs, functions, proteins, sRNA, metabolites) by group |
 | sRNA | sRNA-IMP results (optional): composition per fraction, QC, RNA classes, one feature next to mg and mt |
+| Proteomics | metaproteomics (optional, `imp-explorer proteomics`): library QC, which genera make the proteins of a KEGG term, a genus's main KEGG terms, the proteins of a term |
 | Metabolomics | metabolomics assays (optional, `imp-explorer metabolomics`): clustered heatmap per assay, one metabolite by group in the assay's units, its correlation with taxa / functions of the same samples, feature table |
-| Cohort | results of `imp-explorer cohort` (and of the sRNA-IMP cohort analysis; metabolomics assays as layers `metab.*`): group comparisons within blocks, adjusted models (volcano + table per model, layer, term), beta diversity, QC and covariates |
+| Cohort | results of `imp-explorer cohort` (and of the sRNA-IMP cohort analysis; proteins and metabolomics as layers `prot.*` / `metab.*`): group comparisons within blocks, adjusted models (volcano + table per model, layer, term), beta diversity, QC and covariates |
 
 The top bar sets the grouping variable (any metadata column with 2–12 values) and a sample filter for all pages, e.g.
 `site = site_1` to compare groups within one site.
@@ -66,7 +69,7 @@ The top bar sets the grouping variable (any metadata column with 2–12 values) 
 **Plug-ins.** A study portal adds pages without touching the core: a module with `PAGES = [Page(...)]`
 (`impexplorer.app.ui.Page`: path, name, order, layout(data), register(app, data), required tables), loaded with
 `--plugin my_portal.pages` (or the entry-point group `impexplorer.pages`); extra release tables with `--table name`.
-A page only appears when its tables are in the release, so e.g. the sRNA and Metabolomics pages show up only for studies with these data.
+A page only appears when its tables are in the release, so e.g. the sRNA, Proteomics and Metabolomics pages show up only for studies with these data.
 
 ## Release tables
 

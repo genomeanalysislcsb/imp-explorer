@@ -39,6 +39,10 @@ def is_metab(layer):
     return str(layer).startswith("metab.")
 
 
+def is_prot(layer):
+    return str(layer).startswith("prot.")
+
+
 def metab_units(data, assay):
     a = data.manifest.get("metabolomics", {}).get("assays", {}).get(assay, {})
     u = a.get("units") or ""
@@ -50,6 +54,8 @@ def layer_db(key):
     p = key.split(".")
     if is_metab(key):
         return None
+    if is_prot(key):
+        return "gtdb" if p[1] in ("phylum", "class", "order", "family", "genus", "species") else p[1]
     if is_srna(key):
         s = p[1] if len(p) > 1 else ""
         if s in ("genus", "family", "species"):
@@ -106,6 +112,17 @@ def feature_values(data, layer, feature):
                    [frac, st, feature])
         return d.set_index("sample_id")["v"], "share of the %s reads (%s)" % (
             {"mirna": "human miRNA", "rna_class": "non-human"}.get(st, st.replace("fn_", "")), frac)
+    if is_prot(layer):
+        omic = "mp_" + p[2]
+        if p[1] in ("domain", "phylum", "class", "order", "family", "genus", "species"):
+            d = data.q("SELECT sample_id, rel AS v FROM prot_taxonomy WHERE omic=? AND rank=? AND taxon=?",
+                       [omic, p[1], feature])
+        else:
+            d = data.q("SELECT sample_id, rel AS v FROM prot_functions WHERE omic=? AND db=? AND feature=?",
+                       [omic, p[1], feature])
+        have = data.q("SELECT sample_id FROM prot_samples WHERE omic=?", [omic])["sample_id"].astype(str)
+        v = d.set_index("sample_id")["v"].astype(float).reindex(have).fillna(0)
+        return v, "share of the protein abundance (%s)" % omic
     if is_metab(layer):
         d = data.q("SELECT sample_id, value AS v FROM metab_values WHERE assay=? AND feature_id=?", [p[1], feature])
         return d.set_index("sample_id")["v"].astype(float), metab_units(data, p[1])
@@ -155,7 +172,7 @@ def feature_box(data, layer, feature, subtitle=""):
     lab, cmap = cells(data)
     v = v.reindex(lab.index)
     plain = layer.startswith(("metrics", "ratio")) or layer.endswith(".metrics")
-    if not plain and not is_metab(layer):
+    if not plain and not is_metab(layer) and not is_prot(layer):
         v = v.fillna(0)
     pos = v[v > 0]
     log = not plain and len(pos) > 3 and (
@@ -164,8 +181,8 @@ def feature_box(data, layer, feature, subtitle=""):
     name = ytitle if layer == "metrics" else feature
     if is_srna(layer):
         v = v.dropna() if plain else v   # samples without this sRNA library are not 0
-    if is_metab(layer):
-        v = v.dropna()                   # samples not measured in this assay are not 0
+    if is_metab(layer) or is_prot(layer):
+        v = v.dropna()                   # samples not measured in this assay / fraction are not 0
     return box_by_group(v, lab, cmap, ytitle + (", 0 at the bottom line" if log else ""), log=log, pseudo=pseudo,
                         title="%s · %s%s" % (name, layer_label(data, layer), subtitle), height=420)
 

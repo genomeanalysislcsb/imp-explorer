@@ -37,8 +37,9 @@ proteomics, metabolomics, immune data) as extra tables and pages, without changi
 | [Taxonomy](app.md#taxonomy) | who is there (metagenome) and who is active (metatranscriptome)? |
 | [MAGs](app.md#mags) | which genomes were recovered, how abundant and how active are they? |
 | [Functions](app.md#functions) | which KEGG / CAZy / EC functions differ, and are they expressed? |
-| [Search](app.md#search) | one taxon, function, miRNA or metabolite across every layer |
+| [Search](app.md#search) | one taxon, function, miRNA or metabolite across every layer (incl. proteins) |
 | [sRNA](srna.md) | small-RNA results of sRNA-IMP (optional): QC, RNA classes, miRNAs, taxa, next to mg and mt |
+| [Proteomics](proteomics.md) | metaproteomics (optional): protein profiles of taxa and KEGG terms next to mg and mt, who makes a function |
 | [Metabolomics](metabolomics.md) | metabolomics assays (optional): profiles, one metabolite by group and next to the microbiome |
 | [Cohort](app.md#cohort) | results of the [cohort analysis](cohort.md): group comparisons within blocks, adjusted models, beta diversity, QC and covariates |
 

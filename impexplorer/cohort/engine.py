@@ -190,10 +190,10 @@ class Analysis:
             f = L.tested(self.a.prevalence)
             if not f:
                 continue
-            V = L.rel()[f] if L.kind == "counts" else L.M[f]
+            V = L.rel()[f] if L.kind in ("counts", "auc") else L.M[f]
             t = self.test_matrix(V, list(V.index), key)
             t["mean"] = t["feature"].map(V.mean())
-            t["prevalence"] = t["feature"].map((L.M[f] > 0).mean()) if L.kind in ("counts", "metab") else np.nan
+            t["prevalence"] = t["feature"].map((L.M[f] > 0).mean()) if L.kind in ("counts", "metab", "auc") else np.nan
             if L.kind == "metab":
                 t["name"] = t["feature"].map(getattr(L, "names", {})).fillna("")
             parts.append(t)
@@ -207,13 +207,13 @@ class Analysis:
         nmds_layers = {k.strip() for k in (self.a.nmds or "").split(",") if k.strip()}
         P = self.a.permutations
         for key, L in C.layers.items():
-            if L.kind not in ("counts", "metab"):
+            if L.kind not in ("counts", "metab", "auc"):
                 continue
             t0 = time.time()
             R = L.rel()
             ss = list(R.index)
             # counts: Bray-Curtis of relative abundances; metabolomics: Euclidean of autoscaled log values
-            D = bray_curtis(R.values) if L.kind == "counts" else euclidean_z(R[L.tested(self.a.prevalence) or list(R.columns)].values)
+            D = bray_curtis(R.values) if L.kind in ("counts", "auc") else euclidean_z(R[L.tested(self.a.prevalence) or list(R.columns)].values)
             pos = {s: i for i, s in enumerate(ss)}
             X, expl = pcoa(D, 2)
             o = pd.DataFrame({"layer": key, "sample_id": ss, "axis1": X[:, 0], "axis2": X[:, 1], "method": "PCoA",
@@ -383,6 +383,15 @@ class Analysis:
                     if len(feats) < 2:
                         continue
                     Y = clr(sub[feats].values)
+                elif L.kind == "auc":
+                    # proteins: CLR of the AUC shares, pseudocount half the smallest positive share of the layer
+                    sub = L.rel().loc[keys]
+                    keepf = (sub > 0).mean(axis=0) >= self.a.prevalence
+                    feats = list(sub.columns[keepf])
+                    if len(feats) < 2:
+                        continue
+                    pos = sub[feats].values[sub[feats].values > 0]
+                    Y = clr(sub[feats].values, pseudo=pos.min() / 2 if len(pos) else 1e-9)
                 elif L.kind == "metab":
                     sub = L.M.loc[keys]
                     keepf = ((sub > 0).mean(axis=0) >= self.a.prevalence) & (sub.std(axis=0) > 0)

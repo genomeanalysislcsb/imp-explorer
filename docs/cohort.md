@@ -120,6 +120,7 @@ A layer is one feature set: samples × features.
 | `mag.<rank>.<omic>` | reads on the MAGs, summed per GTDB taxon of the MAGs |
 | `kegg_ko`, `kegg_module`, `kegg_pathway`, `cazy`, `enzyme_ec` `.<omic>` | featureCounts reads per functional term. KEGG global maps (ko011xx, ko012xx) are left out; Mantis `mapNNNNN` duplicates of `koNNNNN` are dropped. |
 | `ratio.<layer>` | expression relative to gene copies: CLR(mt) − CLR(mg) in log2 units, per feature tested in both omics, e.g. `ratio.kegg_module`, `ratio.mag.genus` |
+| `prot.<rank or db>.<fraction>` | metaproteomics imported with [`imp-explorer proteomics`](proteomics.md): AUC per taxon or KEGG term of one fraction (tests on shares, models on CLR, Bray-Curtis); `prot` = genus and KEGG KO / module / pathway of every fraction, included by default when the release has them |
 | `metab.<assay>` | metabolomics assays imported with [`imp-explorer metabolomics`](metabolomics.md): values per feature (tests on the values, models on log2, Euclidean distances of autoscaled log2 values); `metab` = all assays, included by default when the release has them |
 
 `<omic>` is `mg` (metagenome: present, potential) or `mt` (metatranscriptome: active, expressed). Default:

@@ -291,3 +291,30 @@ def clustered_heatmap(M, groups, cmap, rows="variance", cols="top", values="log"
     fig.update_layout(title=title, margin=dict(l=10 if rZ is not None else 80, r=230 if rZ is not None else 150,
                                                t=40 if title else 20, b=50))   # z colour bar under the heatmap
     return fig
+
+
+OMIC_COLOR = {"mg": "#1f2933", "mt": "#d1495b", "mp_extra": "#2a6f97", "mp_intra": "#66a182"}
+
+
+def omic_label(data, o):
+    lab = data.manifest.get("proteomics", {}).get("fractions", {}).get(o)
+    return {"mg": "metagenome", "mt": "metatranscriptome"}.get(o, lab or o)
+
+
+def omics_boxes(series, groups, cmap, title, ytitle, height=420):
+    """grouped boxes of one feature in several profiles: {label: Series (sample -> value)}; colour per profile"""
+    fig = go.Figure()
+    gl = sorted(groups.unique())
+    pal = ["#1f2933", "#d1495b", "#2a6f97", "#66a182", "#edae49", "#8f5aa8"]
+    for i, (lab, v) in enumerate(series.items()):
+        col = OMIC_COLOR.get(lab.split(" ")[-1], pal[i % len(pal)])
+        for lv in gl:
+            x = v[groups.reindex(v.index).values == lv]
+            fig.add_trace(go.Box(y=x.values, x=[lv] * len(x), name=lab, legendgroup=lab, offsetgroup=lab,
+                                 showlegend=(lv == gl[0]), boxpoints="all", jitter=0.4, pointpos=0,
+                                 marker=dict(size=4, color=cmap.get(lv), opacity=0.7),
+                                 line=dict(color=col, width=1.3), fillcolor="rgba(0,0,0,0)", text=list(x.index),
+                                 hovertemplate="%{text}<br>%{y:.3g} %<extra>" + lab + "</extra>"))
+    fig.update_layout(boxmode="group", title=title)
+    fig.update_yaxes(title=ytitle)
+    return style(fig, height)

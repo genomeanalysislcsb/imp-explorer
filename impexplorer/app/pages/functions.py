@@ -9,8 +9,8 @@ from dash import Input, Output, html
 from ..links import anchor, md, url
 from ..stats import group_tests
 from ..ui import GLOBAL, Page, card, control, dd, empty_fig, graph, style
-from ._common import (HEAT_COLS, HEAT_ROWS, HEAT_VALUES, box_by_group, clustered_heatmap, grid, matrix,
-                      selection)
+from ._common import (HEAT_COLS, HEAT_ROWS, HEAT_VALUES, OMIC_COLOR, box_by_group, clustered_heatmap, grid,
+                      matrix, selection)
 
 DB_LABEL = {"kegg_ko": "KEGG orthologs", "kegg_module": "KEGG modules", "kegg_pathway": "KEGG pathways",
             "cazy": "CAZymes", "enzyme_ec": "EC numbers"}
@@ -44,7 +44,8 @@ def layout(data):
         html.H2("Functions"),
         html.P("Reads per functional term (featureCounts on the Mantis annotation of the sample's genes): the "
                "metagenome gives the functional potential, the metatranscriptome the expression. Values are "
-               "relative within each database and omic.", className="lead"),
+               "relative within each database and omic. With metaproteomics imported, the omics mp_<fraction> are the "
+               "protein abundances (AUC) per KEGG term of the proteins of each fraction.", className="lead"),
         html.Div([control("database", dd("fn-db", [{"label": DB_LABEL.get(d, d), "value": d} for d in dbs],
                                          "kegg_module" if "kegg_module" in dbs else (dbs[0] if dbs else None))),
                   control("omic", dd("fn-omic", omics, "mt" if "mt" in omics else (omics[0] if omics else None))),
@@ -129,17 +130,23 @@ def register(app, data):
         p = d.pivot_table(index="sample_id", columns="omic", values="share").reindex(s["sample_id"]).fillna(0)
         fig = go.Figure()
         gl = sorted(g.unique())
-        for omic in [o for o in ("mg", "mt") if o in p.columns]:
+        prot = set(data.distinct("prot_samples", "omic")) if data.has("prot_samples") else set()
+        for omic in [o for o in ("mg", "mt") if o in p.columns] + sorted(c for c in p.columns if c.startswith("mp_")):
+            # proteins: only the samples with that fraction (others are missing, not 0)
+            have = set(data.q("SELECT sample_id FROM prot_samples WHERE omic=?", [omic])["sample_id"]) \
+                if omic in prot else None
             for lv in gl:
                 v = p.loc[g.reindex(p.index).values == lv, omic] * 100
+                if have is not None:
+                    v = v[v.index.isin(have)]
                 fig.add_trace(go.Box(y=v.values, x=[lv] * len(v), name=omic, legendgroup=omic, offsetgroup=omic,
                                      showlegend=(lv == gl[0]), boxpoints="all", jitter=0.4, pointpos=0,
                                      marker=dict(size=4, color=cmap.get(lv), opacity=0.7),
-                                     line=dict(color="#1f2933" if omic == "mg" else "#d1495b", width=1.3),
+                                     line=dict(color=OMIC_COLOR.get(omic, "#8f5aa8"), width=1.3),
                                      fillcolor="rgba(0,0,0,0)", text=list(v.index),
                                      hovertemplate="%{text}<br>%{y:.3g} %<extra>" + omic + "</extra>"))
         fig.update_layout(boxmode="group", title=term)
-        fig.update_yaxes(title="%% of %s reads (mg black, mt red)" % DB_LABEL.get(db, db))
+        fig.update_yaxes(title="%% of %s (reads; proteins: AUC)" % DB_LABEL.get(db, db))
         style(fig, 420)
         if not {"mg", "mt"} <= set(p.columns):
             return fig, empty_fig("needs mg and mt")

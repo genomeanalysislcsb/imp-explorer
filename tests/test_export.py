@@ -492,3 +492,110 @@ def test_metabolomics_layer(tmp_path):
     M = mpage.profile_matrix(d, "kraken.genus.mg", list(d.samples["sample_id"]))
     r = mpage.spearman_all(M.iloc[:, 0], M)
     assert abs(r.iloc[0] - 1) < 1e-9
+
+
+def make_prot_tables(folder, meta):
+    """generic proteomics tables (proteomics_export.py format): 40 proteins of 4 genera with KO / module; fractions
+    extra (S05 missing) and intra; Akkermansia proteins higher in case_a"""
+    import numpy as np
+    os.makedirs(folder, exist_ok=True)
+    rng = np.random.default_rng(5)
+    gen = [("Bacteroides", "Bacteroidota"), ("Blautia_A", "Bacillota_A"), ("Akkermansia", "Verrucomicrobiota"),
+           ("Faecalibacterium", "Bacillota_A")]
+    prots = []
+    for i in range(40):
+        g, ph = gen[i % 4]
+        prots.append({"protein_id": "expobiome_imp_%d" % i, "gene_id": "G%d" % i, "contig_id": "c%d" % i,
+                      "assembly_sample": "S01", "taxid": "", "rank": "genus", "taxon": g,
+                      "lineage": "d_Bacteria;p_%s;g_%s" % (ph, g), "product": "protein %d" % i, "gene": "",
+                      "kegg_ko": "K%05d" % (i % 10) + (",K09999" if i == 3 else ""), "kegg_module": "M%05d" % (i % 3),
+                      "kegg_pathway": "ko00010", "enzyme_ec": "", "cog": "", "pfam": "", "cazy": "", "go": "",
+                      "tcdb": ""})
+    P = pd.DataFrame(prots)
+    P.to_csv(os.path.join(folder, "proteomics_proteins.tsv.gz"), sep="\t", index=False)
+    rows = []
+    for _, r in meta.iterrows():
+        for fr in ("extra", "intra"):
+            if fr == "extra" and r["sample_id"] == "S05":
+                continue
+            for _, q in P.iterrows():
+                if rng.random() < 0.2:
+                    continue
+                v = rng.lognormal(16, 0.5) * (5 if q["taxon"] == "Akkermansia" and r["group"] == "case_a" else 1)
+                rows.append((r["sample_id"].lower(), fr, q["protein_id"], v, int(rng.integers(1, 6))))
+    A = pd.DataFrame(rows, columns=["sample_id", "fraction", "protein_id", "auc", "n_peptides"])
+    A.to_csv(os.path.join(folder, "proteomics_abundance.tsv.gz"), sep="\t", index=False)
+    tot = A.groupby(["sample_id", "fraction"])["auc"].sum() * 1.1          # 10 % of the AUC unannotated
+    S = A.groupby(["sample_id", "fraction"]).agg(n_proteins=("protein_id", "size"), n_peptides=("n_peptides", "sum"))
+    S["total_auc"] = tot
+    S.reset_index().to_csv(os.path.join(folder, "proteomics_samples.tsv"), sep="\t", index=False)
+    J = A.merge(P, on="protein_id")
+    T = []
+    for rank, col in (("genus", "taxon"), ("phylum", None)):
+        x = J.assign(t=J["lineage"].str.extract(r"p_([^;]+)")[0] if col is None else J[col])
+        x = x.groupby(["sample_id", "fraction", "t"], as_index=False).agg(auc=("auc", "sum"), n_proteins=("auc", "size"))
+        T.append(x.rename(columns={"t": "taxon"}).assign(rank=rank))
+    T = pd.concat(T)
+    T["rel"] = T["auc"] / T.set_index(["sample_id", "fraction"]).index.map(tot).values
+    T.to_csv(os.path.join(folder, "proteomics_taxonomy.tsv.gz"), sep="\t", index=False)
+    F = []
+    for db in ("kegg_ko", "kegg_module"):
+        x = J.assign(feature=J[db].str.split(",")).explode("feature")
+        x = x.groupby(["sample_id", "fraction", "feature"], as_index=False).agg(auc=("auc", "sum"),
+                                                                               n_proteins=("auc", "size"))
+        F.append(x.assign(db=db))
+    F = pd.concat(F)
+    F["rel"] = F["auc"] / F.set_index(["sample_id", "fraction"]).index.map(tot).values
+    F.to_csv(os.path.join(folder, "proteomics_functions.tsv.gz"), sep="\t", index=False)
+
+
+def test_proteomics_layer(tmp_path):
+    """imp-explorer proteomics: protein profiles next to mg / mt, cohort layers prot.*, Proteomics page"""
+    from impexplorer import cohort, proteomics
+    root = make_fixture.main(str(tmp_path), n=30)
+    out = tmp_path / "release"
+    export.main(["--imp-root", root, "--metadata", str(tmp_path / "metadata.tsv"), "--out", str(out),
+                 "--threads", "2"])
+    meta = pd.read_csv(tmp_path / "metadata.tsv", sep="\t")
+    make_prot_tables(str(tmp_path / "prot"), meta)
+    assert proteomics.main(["--data", str(out), "--prot", str(tmp_path / "prot"), "--id-case", "upper"]) == 0
+    man = read_manifest(str(out))["proteomics"]
+    assert man["samples_in_release"] == 30 and set(man["fractions"]) == {"mp_extra", "mp_intra"}
+    s = read_table(str(out), "prot_samples")
+    assert len(s) == 59 and set(s["omic"]) == {"mp_extra", "mp_intra"}
+    rc = cohort.main(["--data", str(out), "--block", "site", "--group-order", "control,case_a,case_b",
+                      "--model", "group+site", "--permutations", "49", "--no-report",
+                      "--layers", "kraken.genus.mg,prot"])
+    assert rc == 0
+    t = read_table(str(out), "cohort_tests")
+    assert {"prot.genus.extra", "prot.genus.intra", "prot.kegg_module.extra", "prot.kegg_ko.intra"} <= set(t["layer"])
+    a = t[(t["layer"] == "prot.genus.intra") & (t["feature"] == "Akkermansia") & t["comparison"].str.startswith("case_a vs")]
+    assert len(a) and a["effect"].iloc[0] > 0.8
+    st = read_manifest(str(out))["cohort"]["layers"]
+    assert st["prot.genus.extra"]["samples"] == 29 and st["prot.genus.extra"]["label"] == "Metaproteome extracellular, genus"
+    try:
+        import dash  # noqa: F401
+    except ImportError:
+        return
+    from impexplorer.app import create_app
+    from impexplorer.app.pages import cohort as cpage, overview, proteomics as ppage, search, taxonomy
+    app = create_app(str(out))
+    assert "Proteomics" in [p.name for p in app._imp_pages]
+    d = app._imp_data
+    for p in app._imp_pages:
+        assert p.layout(d) is not None
+    # next to mg / mt in the shared views
+    assert {"mg", "mt", "mp_extra", "mp_intra"} <= set(d.distinct("functions", "omic"))
+    assert "metaproteomics" in set(d.distinct("taxonomy", "source"))
+    ao = taxonomy.across_omics(d, "genus", "Akkermansia", d.samples)
+    assert len(ao["proteins mp_extra"]) == 29 and len(ao["Kraken2 mg"]) == 30
+    v, unit = cpage.feature_values(d, "prot.genus.extra", "Akkermansia")
+    assert len(v) == 29 and "protein abundance" in unit
+    hits = search.find(d, "akkermans")
+    assert "taxonomy" in set(hits["layer"]) and any("mp_" in k for k in hits["kind"])
+    M = ppage.term_genera(d, "mp_intra", "kegg_module", "M00000", list(d.samples["sample_id"]))
+    assert abs(M.sum(axis=1) - 1).max() < 1e-9 and set(M.columns) <= {"Bacteroides", "Blautia_A", "Akkermansia",
+                                                                       "Faecalibacterium"}
+    G = ppage.genus_terms(d, "mp_intra", "kegg_ko", "Bacteroides", list(d.samples["sample_id"]))
+    assert len(G) and (G.max() <= 1 + 1e-9).all().all()
+    assert overview.prot_tiles(d) is not None and "proteins mp_extra" in overview.sample_table(d).columns

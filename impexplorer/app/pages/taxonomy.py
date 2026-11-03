@@ -8,11 +8,11 @@ from dash import Input, Output, State, html
 from ..stats import group_tests
 from ..links import anchor
 from ..ui import GLOBAL, Page, card, control, dd, empty_fig, graph, style
-from ._common import (HEAT_COLS, HEAT_ROWS, HEAT_VALUES, box_by_group, clustered_heatmap, grid, matrix,
+from ._common import (omics_boxes, HEAT_COLS, HEAT_ROWS, HEAT_VALUES, box_by_group, clustered_heatmap, grid, matrix,
                       ordination, selection, stacked)
 from .functions import annot_options, annot_series, default_annot
 
-SOURCE = {"kraken2_bracken": "Kraken2/Bracken", "motus": "mOTUs"}
+SOURCE = {"kraken2_bracken": "Kraken2/Bracken", "motus": "mOTUs", "metaproteomics": "Metaproteomics"}
 RANK_ORDER = ["domain", "phylum", "class", "order", "family", "genus", "species", "motu"]
 
 
@@ -37,7 +37,8 @@ def layout(data):
     return html.Div([
         html.H2("Taxonomy"),
         html.P("Read-based profiles of every sample: Kraken2 + Bracken per rank (database as configured in IMP3) and mOTUs, for the metagenome "
-               "(who is there) and the metatranscriptome (who is active). Abundances are relative within each profile.",
+               "(who is there) and the metatranscriptome (who is active), and, when imported, the metaproteome "
+               "(proteins of the taxon, mp_<fraction>). Abundances are relative within each profile.",
                className="lead"),
         html.Div([control("profile", dd("tx-prof", opts, v0)),
                   control("taxa shown", dd("tx-top", [10, 15, 20, 30, 40, 60], 15)),
@@ -71,6 +72,11 @@ def layout(data):
                   card("Present vs active", graph("tx-mgmt"), note="relative abundance in the metagenome vs the "
                        "metatranscriptome of the same profile and rank; above the diagonal = more active than "
                        "abundant")], className="grid g2"),
+        *([html.Div(style={"height": "16px"}),
+           card("Across omics", graph("tx-omics"), note="share of the taxon at this rank in the metagenome and "
+                "metatranscriptome (Kraken2/Bracken) and in the metaproteome fractions (share of the protein "
+                "abundance, AUC); samples without a profile are left out")]
+          if data.has("prot_taxonomy") else []),
     ])
 
 
@@ -136,12 +142,14 @@ def register(app, data):
         lg = scale == "log"
         pc = (cur * 100)
         pseudo = max(pc[pc > 0].min() / 2, 1e-5) if (pc > 0).any() else 1e-5
-        box = box_by_group(pc, g, cmap, "%% of %s reads (%s)%s" % (omic, rank, ", 0 at the bottom line" if lg else ""),
+        box = box_by_group(pc, g, cmap, "%% of %s (%s)%s" % ("the protein abundance (%s)" % omic if omic.startswith("mp_") else
+                                                     omic + " reads", rank, ", 0 at the bottom line" if lg else ""),
                            title="%s · detected in %d of %d samples" % (taxon, int((pc > 0).sum()), len(pc)),
                            log=lg, pseudo=pseudo if lg else None, height=400)
         p = d.pivot_table(index="sample_id", columns="omic", values="rel_abundance", fill_value=0)
         if not {"mg", "mt"} <= set(p.columns):
-            return box, empty_fig("needs both mg and mt profiles")
+            return box, empty_fig("needs both mg and mt profiles" + (" (proteins: see 'Across omics' below)"
+                                                                     if src == "metaproteomics" else ""))
         fig = go.Figure()
         gg = g.reindex(p.index).fillna("NA")
         lo = max(min(p[p > 0].min().min() * 100, 1e-3), 1e-5)
@@ -158,6 +166,34 @@ def register(app, data):
         r = np.corrcoef(p["mg"].rank(), p["mt"].rank())[0, 1] if len(p) > 3 else np.nan
         fig.update_layout(title="%s · Spearman ρ = %.2f" % (taxon, r))
         return box, style(fig, 400)
+
+    if data.has("prot_taxonomy"):
+        @app.callback(Output("tx-omics", "figure"), Input("tx-taxon", "value"), State("tx-prof", "value"),
+                      Input(GLOBAL[0], "value"), Input(GLOBAL[1], "value"), Input(GLOBAL[2], "value"))
+        def _omics(taxon, prof, group, fcol, fval):
+            if not taxon or not prof:
+                return empty_fig("choose a taxon")
+            s, g, cmap = selection(data, group, fcol, fval)
+            rank = prof.split("|")[2]
+            return omics_boxes(across_omics(data, rank, taxon, s), g, cmap, "%s (%s)" % (taxon, rank),
+                               "% of the profile (reads; proteins: AUC)")
+
+
+def across_omics(data, rank, taxon, samples):
+    """{label: Series(sample -> %)} of one taxon: Kraken2 mg / mt and the metaproteome fractions"""
+    ids = list(samples["sample_id"])
+    d = data.q("SELECT sample_id, source, omic, rel_abundance FROM taxonomy WHERE rank=? AND taxon=? AND source IN "
+               "('kraken2_bracken', 'metaproteomics') AND sample_id IN (SELECT UNNEST(?::VARCHAR[]))",
+               [rank, taxon, ids])
+    have = data.q("SELECT DISTINCT sample_id, source, omic FROM taxonomy WHERE rank=? AND source IN "
+                  "('kraken2_bracken', 'metaproteomics')", [rank])
+    out = {}
+    for (src, o), x in have.groupby(["source", "omic"]):
+        keep = [i for i in ids if i in set(x["sample_id"])]
+        v = d[(d["source"] == src) & (d["omic"] == o)].set_index("sample_id")["rel_abundance"]
+        out["%s %s" % ("Kraken2" if src == "kraken2_bracken" else "proteins", o)] = v.reindex(keep).fillna(0) * 100
+    order = ["Kraken2 mg", "Kraken2 mt"]
+    return dict(sorted(out.items(), key=lambda kv: (order.index(kv[0]) if kv[0] in order else 9, kv[0])))
 
 
 PAGE = Page(path="/taxonomy", name="Taxonomy", order=20, layout=layout, register=register, requires=("taxonomy",))

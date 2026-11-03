@@ -97,3 +97,12 @@ Written by [`imp-explorer metabolomics`](metabolomics.md) (optional): `metab_ass
 (`assay`, `feature_id`, `name`, `annotation`, ...), `metab_values` (`sample_id`, `assay`, `feature_id`, `value`,
 `source_id`), `metab_samples`; summary in the manifest under `metabolomics`. The cohort analysis treats each assay as a
 layer `metab.<assay>`.
+
+## Proteomics tables
+
+Written by [`imp-explorer proteomics`](proteomics.md) (optional): `prot_taxonomy` (`sample_id`, `omic` = `mp_<fraction>`,
+`rank`, `taxon`, `auc`, `rel`, `n_proteins`), `prot_functions` (`sample_id`, `omic`, `db`, `feature`, `auc`, `rel`,
+`n_proteins`), `prot_samples`, `prot_proteins` (catalogue), `prot_abundance`; summary in the manifest under
+`proteomics`. The app adds `prot_taxonomy` and `prot_functions` to the `taxonomy` and `functions` views (source
+`metaproteomics`, reads = AUC), so every page that reads these views sees the protein profiles; the cohort analysis
+uses layers `prot.<rank or database>.<fraction>`.

@@ -13,6 +13,7 @@ COHORT_TABLES = ("cohort_models", "cohort_models_overview", "cohort_tests", "coh
                  "cohort_mag_prevalence")     # written by 'imp-explorer cohort'; optional
 SRNA_TABLES = ("srna_samples", "srna_qc", "srna_features", "srna_tests", "srna_models", "srna_models_overview",
                "srna_permanova", "srna_dispersion", "srna_ordination", "srna_covariates")   # 'imp-explorer srna'
+PROT_TABLES = ("prot_taxonomy", "prot_functions", "prot_samples", "prot_proteins", "prot_abundance")  # 'proteomics'
 METAB_TABLES = ("metab_assays", "metab_features", "metab_values", "metab_samples")    # 'imp-explorer metabolomics'
 # views over the cohort results of IMP3 and of sRNA-IMP (same columns where they mean the same)
 UNION_VIEWS = {"all_tests": ("cohort_tests", "srna_tests"), "all_models": ("cohort_models", "srna_models"),
@@ -30,13 +31,25 @@ class Data:
         self.study = self.manifest.get("study") or os.path.basename(self.release)
         self._local = threading.local()
         self.tables = {}
-        for name in tuple(CORE_TABLES) + COHORT_TABLES + SRNA_TABLES + METAB_TABLES + tuple(extra_tables):
+        for name in tuple(CORE_TABLES) + COHORT_TABLES + SRNA_TABLES + METAB_TABLES + PROT_TABLES + tuple(extra_tables):
             p = table_path(self.release, name)
             if p:
                 self.tables[name] = p
         con = duckdb.connect()
         for name, p in self.tables.items():
             con.execute("CREATE VIEW %s AS SELECT * FROM %s" % (name, self._reader(p)))
+        # metaproteomics next to mg / mt: the protein profiles join the taxonomy and functions views as omics
+        # mp_<fraction> (source 'metaproteomics'; reads = AUC, rel_abundance = share of the total AUC)
+        for core, prot, cols in (("taxonomy", "prot_taxonomy",
+                                  "sample_id, omic, 'metaproteomics' AS source, rank, taxon, NULL AS taxid, auc AS reads, "
+                                  "rel AS rel_abundance"),
+                                 ("functions", "prot_functions", "sample_id, omic, db, feature, auc AS reads")):
+            if prot in self.tables:
+                parts = ["SELECT %s FROM %s" % (cols, self._reader(self.tables[prot]))]
+                if core in self.tables:
+                    parts.insert(0, "SELECT * FROM %s" % self._reader(self.tables[core]))
+                con.execute("CREATE OR REPLACE VIEW %s AS %s" % (core, " UNION ALL BY NAME ".join(parts)))
+                self.tables.setdefault(core, "(view)")
         for view, parts in UNION_VIEWS.items():
             have = [t for t in parts if t in self.tables]
             if have:

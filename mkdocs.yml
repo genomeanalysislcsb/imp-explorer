@@ -30,6 +30,7 @@ nav:
       - Run the app: running.md
       - Cohort analysis: cohort.md
       - sRNA layer: srna.md
+      - Proteomics layer: proteomics.md
       - Metabolomics layer: metabolomics.md
   - The app: app.md
   - Reference:
