@@ -394,6 +394,8 @@ def test_srna_layer(tmp_path):
         assert p.layout(d) is not None
     v, _ = cohort.feature_values(d, "srna_int.genus", "Bacteroides")
     assert len(v) == 12 and (v > 0).all()
+    from impexplorer.app.pages import overview
+    assert overview.srna_tiles(d) is not None and "sRNA-Ext" in overview.sample_table(d).columns
     hits = search.find(d, "miR-21")
     assert (hits["layer"] == "sRNA").any()
     ser = search.series_for(d, "taxonomy", "kraken2_bracken · mg · genus", "Bacteroides", d.samples)

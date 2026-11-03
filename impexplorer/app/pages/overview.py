@@ -10,6 +10,32 @@ KEY_QC = [("mg", "trimmed:pairs", "mg read pairs (trimmed)"), ("mt", "trimmed:pa
           ("mgmt", "n50", "assembly N50"), ("mg", "nonpareil_diversity", "Nonpareil diversity (mg)")]
 
 
+def srna_tiles(data):
+    """second row of key numbers when sRNA-IMP results are imported (imp-explorer srna)"""
+    if not data.has("srna_samples"):
+        return None
+    man = data.manifest.get("srna", {})
+    fr = man.get("fractions", {})
+    lib = data.q("SELECT omic, count(DISTINCT sample_id) AS n FROM srna_samples GROUP BY 1 ORDER BY 1")
+    ids = set(data.q("SELECT DISTINCT sample_id FROM srna_samples")["sample_id"].astype(str))
+    inrel = len(ids & set(data.samples["sample_id"].astype(str)))
+    tiles = [stat_tile(fmt_int(len(ids)), "sRNA samples (%s in this release)" % fmt_int(inrel)),
+             stat_tile(" / ".join(fmt_int(n) for n in lib["n"]),
+                       "libraries: " + " / ".join(fr.get(o, o) for o in lib["omic"]))]
+    if data.has("srna_features"):
+        nf = data.q('SELECT "set", count(DISTINCT feature) AS n FROM srna_features GROUP BY 1')
+        nf = dict(zip(nf["set"], nf["n"]))
+        for st, lab in (("mirna", "human miRNAs"), ("genus", "genera (sRNA rRNA reads)")):
+            if st in nf:
+                tiles.append(stat_tile(fmt_int(nf[st]), lab))
+    if data.has("srna_tests"):
+        q = man.get("sig_q", 0.1)
+        n = data.q("SELECT count(DISTINCT layer || '|' || feature) AS n FROM srna_tests WHERE q < ? "
+                   "AND layer NOT LIKE '%.metrics'", [q])["n"].iloc[0]
+        tiles.append(stat_tile(fmt_int(n), "sRNA features with q < %g in a group comparison" % q))
+    return html.Div(tiles, className="tiles")
+
+
 def sample_table(data):
     q = data.q("SELECT sample_id, omic, metric, value FROM qc") if data.has("qc") else None
     s = data.samples.drop(columns=[c for c in ("imp_dir",) if c in data.samples.columns]).copy()
@@ -21,6 +47,12 @@ def sample_table(data):
         b = data.q("SELECT sample_id, quality, count(*) AS n FROM bins GROUP BY 1, 2")
         for tier in ("high", "medium"):
             s["MAGs %s" % tier] = s["sample_id"].map(b[b["quality"] == tier].set_index("sample_id")["n"]).fillna(0)
+    if data.has("srna_samples"):
+        fr = data.manifest.get("srna", {}).get("fractions", {})
+        lib = data.q("SELECT DISTINCT sample_id, omic FROM srna_samples")
+        for o in sorted(lib["omic"].unique()):
+            have = set(lib.loc[lib["omic"] == o, "sample_id"].astype(str))
+            s[fr.get(o, o)] = s["sample_id"].astype(str).map(lambda x: "yes" if x in have else "")
     return s
 
 
@@ -42,12 +74,15 @@ def layout(data):
         stat_tile(fmt_int(ng), "genera (read-based)"),
         stat_tile(fmt_int(nk), "KEGG orthologs"),
     ], className="tiles")
+    srna = srna_tiles(data)
     return html.Div([
         html.H2("Overview"),
         html.P("Release %s of %s, exported %s from %s. Use 'group by' and 'filter' in the top bar; every page "
                "follows them." % (man.get("release", "?"), data.study, (man.get("created") or "?")[:10],
                                    man.get("sources", {}).get("pipeline", "IMP3")), className="lead"),
         tiles,
+        *([html.Div("Small RNA (sRNA-IMP)", className="tile-label", style={"margin": "4px 0 6px"}), srna]
+          if srna is not None else []),
         html.Div([card("Samples per group", graph("ov-groups")),
                   card("MAGs per sample", graph("ov-mags"), note="high (≥ 90 % complete, ≤ 5 % contamination) and "
                        "medium quality (≥ 50 %, ≤ 10 %) bins of each sample, MIMAG tiers")],

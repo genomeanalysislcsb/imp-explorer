@@ -16,6 +16,10 @@ GTDB).
 Samples per group, MAGs per sample (MIMAG tiers) and a table of all samples with their metadata and key numbers
 (trimmed read pairs, mapping to the assembly, assembly N50, Nonpareil diversity, high- and medium-quality MAGs).
 
+With [sRNA results](srna.md) imported, a second row of numbers shows the sRNA samples (and how many are in the
+release), the libraries per fraction, human miRNAs and genera detected, and the sRNA features with q below the
+threshold in a group comparison; the sample table gets one column per sRNA fraction.
+
 ![Overview](img/overview.png)
 
 ## QC
