@@ -50,14 +50,15 @@ start it on a node and open it through an SSH tunnel (`ssh -L 8050:<node>:8050 <
 
 | page | what it shows |
 |---|---|
-| Overview | samples per group, MAGs per sample (MIMAG tiers), sample table with metadata and key numbers |
+| Overview | samples per group, MAGs per sample (MIMAG tiers), sample table with metadata and key numbers (plus key numbers of the sRNA and metabolomics layers when present) |
 | QC | any QC metric by group (curated metrics first, all IMP3 summary statistics), metric vs metric |
 | Taxonomy | Kraken2/Bracken or mOTUs per omic and rank: composition (stacked bars or clustered heatmap), Bray-Curtis PCoA + PERMANOVA, group tests (Kruskal-Wallis / Mann-Whitney, BH-FDR), one taxon by group and mg vs mt |
 | MAGs | CheckM2 quality, GTDB taxonomy of the MAGs, abundance (mg) and activity (mt) of a taxon's MAGs by group, log2(mt/mg) per MAG, MAG catalogue |
 | Functions | KEGG KO / module / pathway, CAZy, EC per omic: clustered heatmap of the most variable terms (rows / samples clustered, CLR or log, site colour bar), group tests, one term by group, expression ratio mt/mg |
-| Search | one name across all layers (Kraken2, mOTUs, MAGs, functions) by group |
+| Search | one name across all layers (Kraken2, mOTUs, MAGs, functions, sRNA, metabolites) by group |
 | sRNA | sRNA-IMP results (optional): composition per fraction, QC, RNA classes, one feature next to mg and mt |
-| Cohort | results of `imp-explorer cohort` (and of the sRNA-IMP cohort analysis): group comparisons within blocks, adjusted models (volcano + table per model, layer, term), beta diversity, QC and covariates |
+| Metabolomics | metabolomics assays (optional, `imp-explorer metabolomics`): clustered heatmap per assay, one metabolite by group in the assay's units, its correlation with taxa / functions of the same samples, feature table |
+| Cohort | results of `imp-explorer cohort` (and of the sRNA-IMP cohort analysis; metabolomics assays as layers `metab.*`): group comparisons within blocks, adjusted models (volcano + table per model, layer, term), beta diversity, QC and covariates |
 
 The top bar sets the grouping variable (any metadata column with 2–12 values) and a sample filter for all pages, e.g.
 `site = site_1` to compare groups within one site.
@@ -65,7 +66,7 @@ The top bar sets the grouping variable (any metadata column with 2–12 values) 
 **Plug-ins.** A study portal adds pages without touching the core: a module with `PAGES = [Page(...)]`
 (`impexplorer.app.ui.Page`: path, name, order, layout(data), register(app, data), required tables), loaded with
 `--plugin my_portal.pages` (or the entry-point group `impexplorer.pages`); extra release tables with `--table name`.
-A page only appears when its tables are in the release, so e.g. an sRNA page shows up only for studies with sRNA data.
+A page only appears when its tables are in the release, so e.g. the sRNA and Metabolomics pages show up only for studies with these data.
 
 ## Release tables
 
