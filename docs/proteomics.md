@@ -18,7 +18,7 @@ Each table can be `.parquet`, `.tsv` or `.tsv.gz` in the `--prot` folder.
 | table | columns | |
 |---|---|---|
 | `proteomics_taxonomy` | `sample_id`, `fraction`, `rank`, `taxon`, `auc`, `rel`, `n_proteins` | required |
-| `proteomics_functions` | `sample_id`, `fraction`, `db` (`kegg_ko`, `kegg_module`, `kegg_pathway`), `feature`, `auc`, `rel`, `n_proteins` | required |
+| `proteomics_functions` | `sample_id`, `fraction`, `db` (`kegg_ko`, `kegg_module`, `kegg_pathway`, `pfam`, `cog`), `feature`, `auc`, `rel`, `n_proteins` | required |
 | `proteomics_samples` | `sample_id`, `fraction`, `n_proteins`, `n_peptides`, `total_auc` | optional |
 | `proteomics_proteins` | `protein_id`, `taxon`, `rank`, `lineage` (GTDB, `d_…;p_…;…;g_…;s_…`), `product`, `kegg_ko`, `kegg_module`, `kegg_pathway`, … (several terms `,`) | optional: catalogue |
 | `proteomics_abundance` | `sample_id`, `fraction`, `protein_id`, `auc`, `n_peptides` | optional |
@@ -50,7 +50,7 @@ For Expobiome, `proteomics_export.py` writes these tables from the files of the 
 
 `imp-explorer cohort` analyses the protein profiles as layers `prot.<rank or database>.<fraction>`, e.g.
 `prot.genus.extra` or `prot.kegg_module.intra`. When the release has proteomics, genus, KEGG KO, KEGG module and KEGG
-pathway of every fraction are included by default; with `--layers`, add `prot` for the same set, or single layers.
+pathway (and Pfam / COG when imported) of every fraction are included by default; with `--layers`, add `prot` for the same set, or single layers.
 
 | step | protein layers |
 |---|---|

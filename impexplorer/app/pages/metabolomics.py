@@ -50,9 +50,39 @@ def groups(data, group, fcol, fval, assay):
     return keep, g.reindex(keep).fillna("NA"), cmap, s
 
 
+SRNA_SETS = {"mirna": "human miRNAs", "genus": "genera (rRNA reads)", "rna_class": "RNA classes",
+             "fn_kegg_module": "KEGG modules (reads on CDS)"}
+
+
+def profile_options(data):
+    """[(key, label)] of the profiles a metabolite can be correlated with: IMP3 mg / mt, proteins, sRNA"""
+    out = [(k, lab) for k, lab in PROFILES
+           if (k.startswith("kraken") and data.has("taxonomy")) or (k.startswith("mag") and data.has("bins"))
+           or (k.startswith("kegg") and data.has("functions"))
+           or (k.startswith("prot.") and data.has("prot_samples")
+               and k.split(".")[2] in data.distinct("prot_samples", "omic"))]
+    if data.has("srna_features"):
+        fr = data.manifest.get("srna", {}).get("fractions", {})
+        have = data.q('SELECT DISTINCT omic, "set" FROM srna_features')
+        for o in sorted(have["omic"].unique()):
+            for st, lab in SRNA_SETS.items():
+                if ((have["omic"] == o) & (have["set"] == st)).any():
+                    out.append(("srna.%s.%s" % (o, st), "sRNA %s: %s" % (fr.get(o, o), lab)))
+    return out
+
+
 def profile_matrix(data, key, ids):
     """samples x features (relative abundance) of an IMP3 profile, features in >= 10 % of the samples"""
     p = key.split(".")
+    if p[0] == "srna":
+        if not data.has("srna_features"):
+            return pd.DataFrame()
+        d = data.q('SELECT sample_id, feature AS f, rel AS v FROM srna_features WHERE omic=? AND "set"=? AND '
+                   "sample_id IN (SELECT UNNEST(?::VARCHAR[]))", [p[1], p[2], list(ids)])
+        if d.empty:
+            return pd.DataFrame()
+        M = d.pivot_table(index="sample_id", columns="f", values="v", aggfunc="sum", fill_value=0.0)
+        return M.loc[:, (M > 0).mean() >= 0.1]
     if p[0] == "prot":
         if p[1] == "genus" and data.has("prot_taxonomy"):
             d = data.q("SELECT sample_id, taxon AS f, rel AS v FROM prot_taxonomy WHERE rank=? AND omic=? AND "
@@ -97,10 +127,7 @@ def spearman_all(v, M):
 def layout(data):
     opts = assays(data)
     a0 = opts[0]["value"] if opts else None
-    prof = [{"label": lab, "value": k} for k, lab in PROFILES
-            if (k.startswith("kraken") and data.has("taxonomy")) or (k.startswith("mag") and data.has("bins"))
-            or (k.startswith("kegg") and data.has("functions"))
-            or (k.startswith("prot.") and data.has("prot_samples") and k.split(".")[2] in data.distinct("prot_samples", "omic"))]
+    prof = [{"label": lab, "value": k} for k, lab in profile_options(data)]
     man = data.manifest.get("metabolomics", {}).get("assays", {})
     rows = [html.Li("%s: %s · %s · %s, acquired %s; %s%s" % (
         a, m.get("label") or a, m.get("platform") or "", m.get("matrix") or "", m.get("acquisition_date") or "?",
@@ -128,8 +155,9 @@ def layout(data):
                  className="controls"),
         html.Div([card("Feature by group", graph("mb-box")),
                   card("Feature and the microbiome", graph("mb-cor"),
-                       note="Spearman correlation with every taxon / function of the IMP3 profile present in "
-                            ">= 10 % of the samples; the 20 strongest. Exploratory, not adjusted for anything")],
+                       note="Spearman correlation with every feature of the chosen profile (IMP3 mg / mt, "
+                            "metaproteome, sRNA) present in >= 10 % of the samples that have both; the 20 strongest. "
+                            "Exploratory, not adjusted for anything")],
                  className="grid g2"),
         html.Div(style={"height": "16px"}),
         card("Features", grid("mb-grid", pd.DataFrame(), height=380, fit=True),
@@ -204,7 +232,7 @@ def register(app, data):
                                hovertemplate="%{y}<br>ρ %{x:.2f}<extra></extra>"))
         fig.update_xaxes(title="Spearman ρ (n = %d samples)" % len(M), range=[-1, 1])
         fig.update_yaxes(tickfont=dict(size=10))
-        fig.update_layout(title="%s vs %s" % (name, dict(PROFILES).get(prof, prof)), margin=dict(l=220))
+        fig.update_layout(title="%s vs %s" % (name, dict(profile_options(data)).get(prof, prof)), margin=dict(l=220))
         return box, style(fig, 420, legend=False)
 
 

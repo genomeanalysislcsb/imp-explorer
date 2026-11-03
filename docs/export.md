@@ -76,7 +76,7 @@ The `samples` table keeps the IMP3 folder of each sample (`imp_dir`). By default
 | `--paths` | `relative` | `relative`, `absolute` or `none`: how `imp_dir` is stored |
 | `--out` | – | release directory to write |
 | `--study` | `study` | study name shown in the app |
-| `--function-dbs` | `kegg_ko,kegg_module,kegg_pathway,cazy,enzyme_ec` | Mantis databases to export (`go`, `pfam`, `cog`, `eggnog`, … also work but are large) |
+| `--function-dbs` | `kegg_ko,kegg_module,kegg_pathway,cazy,enzyme_ec` | Mantis databases to export: `<omic>.mantis.<db>.counts.tsv` of each sample. `pfam` and `cog` are supported throughout (Pfam accessions / COG ids only, links to InterPro / NCBI, cohort layers `pfam.mg` … by default when exported); `go`, `eggnog`, … also work but are large |
 | `--format` | `auto` | `parquet` (needs pyarrow), `tsv` (TSV.gz) or `auto` |
 | `--threads` | 4 | samples read in parallel |
 

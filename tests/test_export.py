@@ -599,3 +599,24 @@ def test_proteomics_layer(tmp_path):
     G = ppage.genus_terms(d, "mp_intra", "kegg_ko", "Bacteroides", list(d.samples["sample_id"]))
     assert len(G) and (G.max() <= 1 + 1e-9).all().all()
     assert overview.prot_tiles(d) is not None and "proteins mp_extra" in overview.sample_table(d).columns
+
+
+def test_pfam_cog_functions(tmp_path):
+    """--function-dbs with pfam and cog: Pfam accessions only (no names), COG ids, links, cohort default layers"""
+    from impexplorer import cohort
+    from impexplorer.app.links import url
+    root = make_fixture.main(str(tmp_path), n=12)
+    out = tmp_path / "release"
+    export.main(["--imp-root", root, "--metadata", str(tmp_path / "metadata.tsv"), "--out", str(out), "--threads", "1",
+                 "--function-dbs", "kegg_ko,kegg_module,pfam,cog"])
+    f = read_table(str(out), "functions")
+    assert set(f[f["db"] == "pfam"]["feature"]) == {"PF00001", "PF00002", "PF00004", "PF00008", "PF00016"}
+    assert set(f[f["db"] == "cog"]["feature"]) == {"COG0001", "COG0002", "COG0005", "COG0012"}
+    assert url("pfam", "PF00001").startswith("https://www.ebi.ac.uk/interpro/") and "COG0005" in url("cog", "COG0005")
+    names = tmp_path / "cog.def.tab"
+    names.write_text("COG0001\tH\tGlutamate-1-semialdehyde aminotransferase\themL\n")
+    assert cohort.main(["--data", str(out), "--permutations", "19", "--no-report", "--term-names", str(names),
+                        "--model", "group"]) == 0
+    t = read_table(str(out), "cohort_tests")
+    assert {"pfam.mg", "pfam.mt", "cog.mg", "cog.mt"} <= set(t["layer"])
+    assert t[t["feature"] == "COG0001"]["name"].iloc[0] == "Glutamate-1-semialdehyde aminotransferase"

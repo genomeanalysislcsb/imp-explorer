@@ -91,7 +91,8 @@ Kraken2 mg and mt, mOTUs mg and mt, and the MAGs mg and mt.
 ## sRNA
 
 Shown when the release contains sRNA results ([`imp-explorer srna`](srna.md)): composition of any sRNA feature set,
-library QC, RNA classes by group, and one feature next to the metagenome and metatranscriptome of the same samples.
+library QC, RNA classes by group, and one feature next to the metagenome, metatranscriptome and (when imported) the
+metaproteome fractions of the same samples, with Spearman ρ per profile.
 
 ## Proteomics
 
@@ -104,7 +105,8 @@ mt and the protein fractions) and on the Functions page (a term in mg, mt and th
 
 Shown when the release contains metabolomics results ([`imp-explorer metabolomics`](metabolomics.md)): profiles of
 each assay (clustered heatmap; all features or identified only), one feature by group in the units of the assay, its
-Spearman correlation with the taxa or functions of the IMP3 profiles, and a table of all features. With metabolomics
+Spearman correlation with the taxa or functions of the IMP3 profiles, the metaproteome or the sRNA feature sets (human
+miRNAs, genera of the rRNA reads, RNA classes), and a table of all features. With metabolomics
 imported, the Overview shows a row of key numbers and one column per assay in the sample table, and Search finds
 metabolites.
 

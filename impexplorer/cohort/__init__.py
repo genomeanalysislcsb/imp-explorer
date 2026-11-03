@@ -74,6 +74,9 @@ def main(argv=None):
     default = a.layers == settings.DEFAULT_LAYERS
     if default and table_path(a.data, "metab_values"):
         a.layers += ",metab"                  # metabolomics of the release (imp-explorer metabolomics): every assay
+    fdbs = read_manifest(a.data).get("sources", {}).get("function_dbs") or []
+    if default:                               # Pfam / COG of mg and mt, when exported (--function-dbs)
+        a.layers += "".join(",%s.mg,%s.mt" % (d, d) for d in ("pfam", "cog") if d in fdbs)
     if default and table_path(a.data, "prot_samples"):
         a.layers += ",prot"                   # metaproteomics: genus and KEGG layers of every fraction
     C.load_layers(a.layers)

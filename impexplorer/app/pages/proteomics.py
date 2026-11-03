@@ -11,7 +11,13 @@ from ..ui import GLOBAL, Page, card, control, dd, empty_fig, graph, style
 from ._common import box_by_group, column_defs, grid, omic_label, selection
 
 DBS = [{"label": "KEGG module", "value": "kegg_module"}, {"label": "KEGG ortholog", "value": "kegg_ko"},
-       {"label": "KEGG pathway", "value": "kegg_pathway"}]
+       {"label": "KEGG pathway", "value": "kegg_pathway"}, {"label": "Pfam domain", "value": "pfam"},
+       {"label": "COG", "value": "cog"}]
+
+
+def dbs(data):
+    have = set(data.distinct("prot_functions", "db"))
+    return [d for d in DBS if d["value"] in have]
 METRICS = [{"label": "proteins identified", "value": "n_proteins"}, {"label": "peptides", "value": "n_peptides"},
            {"label": "total protein abundance (AUC)", "value": "total_auc"}]
 GENUS = "regexp_extract(p.lineage, '(?:^|;)g_([^;]+)', 1)"
@@ -121,7 +127,7 @@ def layout(data):
         card("Libraries", graph("pr-qc"), note="per sample and fraction: proteins identified, peptides, total AUC "
              "(%d proteins in the catalogue)" % int(man.get("proteins", 0) or 0)),
         html.Div(style={"height": "16px"}),
-        *([html.Div([control("database", dd("pr-db", DBS, "kegg_module")),
+        *([html.Div([control("database", dd("pr-db", dbs(data), "kegg_module")),
                      control("term", dd("pr-term", [], None, placeholder="type to search")),
                      control("genus", dd("pr-genus", gen, gen[0] if gen else None))], className="controls"),
            html.Div([card("Who makes it", graph("pr-who"), note="share of the term's protein abundance made by "

@@ -1,4 +1,4 @@
-"""Links from feature ids to their reference pages (KEGG, CAZy, ExPASy, GTDB)."""
+"""Links from feature ids to their reference pages (KEGG, CAZy, Pfam / InterPro, NCBI COG, GTDB)."""
 import re
 from urllib.parse import quote
 
@@ -17,13 +17,17 @@ def url(db, feature):
         return "https://www.genome.jp/dbget-bin/www_bget?ec:" + f
     if db == "cazy" and re.fullmatch(r"(GH|GT|PL|CE|AA|CBM)\d+", f):
         return "http://www.cazy.org/%s.html" % f
+    if db == "pfam" and re.fullmatch(r"PF\d{5}", f):
+        return "https://www.ebi.ac.uk/interpro/entry/pfam/" + f
+    if db == "cog" and re.fullmatch(r"COG\d{4}", f):
+        return "https://www.ncbi.nlm.nih.gov/research/cog/cog/%s/" % f
     if db == "gtdb" and f:
         return "https://gtdb.ecogenomic.org/searches?s=al&q=" + quote(f)
     return None
 
 
 SITE = {"kegg_ko": "KEGG", "kegg_pathway": "KEGG", "kegg_module": "KEGG", "enzyme_ec": "KEGG", "cazy": "CAZy",
-        "gtdb": "GTDB"}
+        "gtdb": "GTDB", "pfam": "InterPro", "cog": "NCBI COG"}
 
 
 def md(db, feature):

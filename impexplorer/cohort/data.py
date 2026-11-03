@@ -13,7 +13,7 @@ from .stats import clr, column_kind, is_missing
 
 GLOBAL_MAPS = re.compile(r"^(ko|map)01[12]\d\d$")       # KEGG global / overview maps: not tested
 LAYER_LABEL = {"kraken": "Kraken2/Bracken", "motus": "mOTUs", "mag": "MAGs (GTDB)", "kegg_module": "KEGG module",
-               "kegg_pathway": "KEGG pathway", "kegg_ko": "KEGG KO", "cazy": "CAZy", "enzyme_ec": "EC"}
+               "kegg_pathway": "KEGG pathway", "kegg_ko": "KEGG KO", "cazy": "CAZy", "enzyme_ec": "EC", "pfam": "Pfam", "cog": "COG"}
 OMIC = {"mg": "metagenome", "mt": "metatranscriptome"}
 
 # per-sample metrics: name -> (label, unit/scale note); computed in Cohort.metrics_table
@@ -332,7 +332,9 @@ class Cohort:
             elif k in ("prot", "prot.all"):
                 s = read_table(self.release, "prot_samples")
                 fr = sorted({str(o)[3:] for o in s["omic"]}) if len(s) else []
-                out += ["prot.%s.%s" % (x, f) for x in ("genus", "kegg_module", "kegg_pathway", "kegg_ko") for f in fr]
+                pdbs = read_manifest(self.release).get("proteomics", {}).get("dbs") or []
+                out += ["prot.%s.%s" % (x, f) for x in ("genus", "kegg_module", "kegg_pathway", "kegg_ko") +
+                        tuple(d for d in ("pfam", "cog") if d in pdbs) for f in fr]
             else:
                 out.append(k)
         return ",".join(dict.fromkeys(out))

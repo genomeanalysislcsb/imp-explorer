@@ -297,11 +297,21 @@ def _featurecounts(path):
     return s[s > 0].to_dict()
 
 
+# ids kept per database: Mantis lists Pfam accessions and names (PF00202 and Aminotran_3) for the same domain,
+# so counting both would count the reads twice; the same for COG ids next to other eggNOG ids
+ID_PATTERN = {"pfam": re.compile(r"PF\d{5}$"), "cog": re.compile(r"COG\d{4}$")}
+
+
 def functions(base, sample, dbs=DEFAULT_FUNCTION_DBS):
     rows = []
     for o in OMICS:
         for db in dbs:
-            for f, v in _featurecounts(find(base, "Analysis/annotation/%s.mantis.%s.counts.tsv" % (o, db))).items():
+            fc = _featurecounts(find(base, "Analysis/annotation/%s.mantis.%s.counts.tsv" % (o, db)))
+            rx = ID_PATTERN.get(db)
+            if rx is not None:
+                fc = {re.sub(r"\.\d+$", "", f): v for f, v in fc.items() if rx.match(re.sub(r"\.\d+$", "", f))} \
+                    or fc                        # other id formats: kept as they are
+            for f, v in fc.items():
                 rows.append((sample, o, db, f, v))
     return pd.DataFrame(rows, columns=TABLES["functions"]["columns"]) if rows else empty("functions")
 

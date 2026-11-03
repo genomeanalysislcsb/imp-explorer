@@ -1,4 +1,4 @@
-"""Functions: KEGG / CAZy / EC terms in the metagenome (potential) and metatranscriptome (expression), group tests,
+"""Functions: KEGG / CAZy / EC / Pfam / COG terms in the metagenome (potential) and metatranscriptome (expression), group tests,
 one term in detail with its expression ratio."""
 import numpy as np
 import pandas as pd
@@ -13,7 +13,7 @@ from ._common import (HEAT_COLS, HEAT_ROWS, HEAT_VALUES, OMIC_COLOR, box_by_grou
                       matrix, selection)
 
 DB_LABEL = {"kegg_ko": "KEGG orthologs", "kegg_module": "KEGG modules", "kegg_pathway": "KEGG pathways",
-            "cazy": "CAZymes", "enzyme_ec": "EC numbers"}
+            "cazy": "CAZymes", "enzyme_ec": "EC numbers", "pfam": "Pfam domains", "cog": "COGs"}
 
 
 def load(data, db, omic, samples):

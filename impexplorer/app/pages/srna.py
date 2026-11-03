@@ -22,7 +22,9 @@ SET_ORDER = list(SET_LABEL)
 # sRNA feature set -> (IMP3 table, filters) for the comparison with the metagenome / metatranscriptome
 IMP3_TWIN = {"genus": ("taxonomy", "genus"), "family": ("taxonomy", "family"), "species": ("taxonomy", "species"),
              "fn_kegg_module": ("functions", "kegg_module"), "fn_kegg_pathway": ("functions", "kegg_pathway"),
-             "fn_kegg_ko": ("functions", "kegg_ko")}
+             "fn_kegg_ko": ("functions", "kegg_ko"), "fn_pfam": ("functions", "pfam"), "fn_cog": ("functions", "cog")}
+# marker per profile in the comparison: mg / mt (reads), metaproteome fractions (proteins)
+SYMBOL = {"mg": "circle", "mt": "triangle-up", "mp_extra": "square", "mp_intra": "diamond"}
 
 
 def fractions(data):
@@ -96,9 +98,10 @@ def layout(data):
         html.Div([control("feature", dd("sr-feat", [], None, placeholder="type to search")),
                   html.Div(id="sr-link", className="linkbox")], className="controls"),
         html.Div([card("Feature by group", graph("sr-box")),
-                  card("sRNA vs metagenome and metatranscriptome", graph("sr-twin"),
+                  card("sRNA vs metagenome, metatranscriptome and metaproteome", graph("sr-twin"),
                        note="the same taxon or function in the IMP3 profiles of the same samples (Kraken2 for taxa, "
-                            "featureCounts for KEGG); log scale, 0 at the axis minimum")], className="grid g2"),
+                            "featureCounts for KEGG / Pfam / COG) and, when imported, in the metaproteome fractions "
+                            "(share of the protein abundance); log scale, 0 at the axis minimum")], className="grid g2"),
     ])
 
 
@@ -196,8 +199,8 @@ def register(app, data):
         if not twin or not data.has(twin[0]):
             return box, empty_fig("no IMP3 counterpart for this feature set")
         if twin[0] == "taxonomy":
-            t = data.q("SELECT sample_id, omic, rel_abundance AS v FROM taxonomy WHERE source='kraken2_bracken' "
-                       "AND rank=? AND taxon=?", [twin[1], feat])
+            t = data.q("SELECT sample_id, omic, rel_abundance AS v FROM taxonomy WHERE source IN "
+                       "('kraken2_bracken', 'metaproteomics') AND rank=? AND taxon=?", [twin[1], feat])
         else:
             t = data.q("SELECT f.sample_id, f.omic, f.reads / t.tot AS v FROM functions f JOIN (SELECT sample_id, omic, "
                        "sum(reads) AS tot FROM functions WHERE db=? GROUP BY 1, 2) t USING (sample_id, omic) "
@@ -205,23 +208,28 @@ def register(app, data):
         if t.empty:
             return box, empty_fig("%s not in the IMP3 profiles" % feat)
         p = t.pivot_table(index="sample_id", columns="omic", values="v", aggfunc="sum").reindex(ids).fillna(0) * 100
+        omics = [c for c in ("mg", "mt") if c in p.columns] + sorted(c for c in p.columns if str(c).startswith("mp_"))
+        # protein fractions: only the samples with that fraction (others are missing, not 0)
+        have = {o: set(data.q("SELECT sample_id FROM prot_samples WHERE omic=?", [o])["sample_id"].astype(str))
+                for o in omics if o.startswith("mp_")} if data.has("prot_samples") else {}
         fig = go.Figure()
         gg = g.reindex(p.index).fillna("NA")
-        allv = pd.concat([v] + [p[c] for c in p.columns])
+        allv = pd.concat([v] + [p[c] for c in omics])
         lo = max(allv[allv > 0].min() / 2, 1e-6) if (allv > 0).any() else 1e-6
-        for j, omic in enumerate([c for c in ("mg", "mt") if c in p.columns]):
+        rho = {}
+        for omic in omics:
+            idx0 = [i for i in p.index if omic not in have or i in have[omic]]
+            if len(idx0) > 3:
+                rho[omic] = np.corrcoef(p.loc[idx0, omic].rank(), v.reindex(idx0).rank())[0, 1]
             for lv in sorted(gg.unique()):
-                idx = gg.index[gg == lv]
+                idx = [i for i in idx0 if gg[i] == lv]
                 fig.add_trace(go.Scatter(x=p.loc[idx, omic].clip(lower=lo), y=v.reindex(idx).clip(lower=lo),
                                          mode="markers", name="%s · %s" % (omic, lv), text=list(idx),
                                          marker=dict(size=7, color=cmap.get(lv, "#555"),
-                                                     symbol="circle" if omic == "mg" else "triangle-up",
-                                                     line=dict(width=0.5, color="#fff")),
+                                                     symbol=SYMBOL.get(omic, "x"), line=dict(width=0.5, color="#fff")),
                                          hovertemplate="%{text}<br>" + omic + " %{x:.3g} %<br>sRNA %{y:.3g} %"
                                                        "<extra></extra>"))
-        rho = {o: (np.corrcoef(p[o].rank(), v.reindex(p.index).rank())[0, 1] if len(p) > 3 else np.nan)
-               for o in ("mg", "mt") if o in p.columns}
-        fig.update_xaxes(type="log", title="% in the IMP3 profile (circle mg, triangle mt)")
+        fig.update_xaxes(type="log", title="% in the IMP3 profile (reads; proteins: AUC)")
         fig.update_yaxes(type="log", title="% in the sRNA library")
         fig.update_layout(title="%s · Spearman ρ %s" % (feat, ", ".join("%s %.2f" % (k, r) for k, r in rho.items())))
         return box, style(fig, 400)

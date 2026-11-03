@@ -97,7 +97,7 @@ analysis, so groups, reference, blocks and models are the same for all of them.
 | `--sig-q` | `sig_q` | 0.1 | FDR threshold for highlights and key findings |
 | `--outlier-z` | `outlier_z` | 4 | robust z of a QC metric that gives WARN (0 = off) |
 | `--qc-drop` | `qc_drop` | `FAIL` | samples left out: `FAIL`, `WARN` (= WARN + FAIL) or `none` |
-| `--term-names` | `term_names` | – | `term<TAB>name` TSVs or KEGG flat files for readable KEGG labels |
+| `--term-names` | `term_names` | – | `term<TAB>name` TSVs, KEGG flat files, `Pfam-A.clans.tsv(.gz)` or NCBI `cog-24.def.tab` for readable labels |
 | `--name` | `name` | study name | report title |
 | `--min-mg-pairs` | `min_mg_pairs` | 1e6 | FAIL below this many trimmed metagenome read pairs |
 | `--min-mt-pairs` | `min_mt_pairs` | 1e6 | below this, the sample is left out of the metatranscriptome layers (WARN) |
@@ -118,7 +118,7 @@ A layer is one feature set: samples × features.
 | `kraken.<rank>.<omic>` | Kraken2/Bracken reads per taxon (rank: phylum … species) |
 | `motus.<rank>.<omic>` | mOTUs reads per taxon |
 | `mag.<rank>.<omic>` | reads on the MAGs, summed per GTDB taxon of the MAGs |
-| `kegg_ko`, `kegg_module`, `kegg_pathway`, `cazy`, `enzyme_ec` `.<omic>` | featureCounts reads per functional term. KEGG global maps (ko011xx, ko012xx) are left out; Mantis `mapNNNNN` duplicates of `koNNNNN` are dropped. |
+| `kegg_ko`, `kegg_module`, `kegg_pathway`, `cazy`, `enzyme_ec`, `pfam`, `cog` `.<omic>` | featureCounts reads per functional term. KEGG global maps (ko011xx, ko012xx) are left out; Mantis `mapNNNNN` duplicates of `koNNNNN` are dropped. |
 | `ratio.<layer>` | expression relative to gene copies: CLR(mt) − CLR(mg) in log2 units, per feature tested in both omics, e.g. `ratio.kegg_module`, `ratio.mag.genus` |
 | `prot.<rank or db>.<fraction>` | metaproteomics imported with [`imp-explorer proteomics`](proteomics.md): AUC per taxon or KEGG term of one fraction (tests on shares, models on CLR, Bray-Curtis); `prot` = genus and KEGG KO / module / pathway of every fraction, included by default when the release has them |
 | `metab.<assay>` | metabolomics assays imported with [`imp-explorer metabolomics`](metabolomics.md): values per feature (tests on the values, models on log2, Euclidean distances of autoscaled log2 values); `metab` = all assays, included by default when the release has them |

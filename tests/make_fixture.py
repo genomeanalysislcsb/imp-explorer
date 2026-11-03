@@ -146,6 +146,11 @@ def make_sample(root, sid, group, rng, old_bracken, folder=None):
         w(os.path.join(b, "Analysis", "annotation", "%s.mantis.kegg_ko.counts.tsv.gz" % o), fc_table(o, "kegg_ko", kos))
         w(os.path.join(b, "Analysis", "annotation", "%s.mantis.kegg_module.counts.tsv.gz" % o),
           fc_table(o, "kegg_module", {m: rng.lognormvariate(9, 1) for m in MODULES}))
+        pf = {"PF%05d" % i: rng.lognormvariate(8, 1) for i in (1, 2, 4, 8, 16)}
+        pf["Aminotran_3"] = 50.0                  # Pfam names next to the accessions: left out by the export
+        w(os.path.join(b, "Analysis", "annotation", "%s.mantis.pfam.counts.tsv.gz" % o), fc_table(o, "pfam", pf))
+        w(os.path.join(b, "Analysis", "annotation", "%s.mantis.cog.counts.tsv.gz" % o),
+          fc_table(o, "cog", {"COG%04d" % i: rng.lognormvariate(8, 1) for i in (1, 2, 5, 12)}))
 
 
 GROUPS = ("control", "case_a", "case_b")

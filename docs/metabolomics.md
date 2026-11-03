@@ -70,8 +70,8 @@ The results appear on the app's Cohort page as "Metabolomics: …" layers, and i
 - **Metabolomics page:**
   - profiles of each assay as a clustered heatmap (all features or identified only);
   - one feature by group, in the units of the assay;
-  - the feature's Spearman correlation with the taxa or functions of the IMP3 profiles of the same samples
-    (exploratory);
+  - the feature's Spearman correlation with the taxa or functions of the IMP3 profiles, the metaproteome fractions or
+    the sRNA feature sets (human miRNAs, genera of the rRNA reads, RNA classes) of the same samples (exploratory);
   - a table of all features with annotation, detection and median per group.
 - **Search:** finds metabolites by name or feature id and plots the values by group.
 - **Overview:** a row of key numbers, and one column per assay in the sample table.

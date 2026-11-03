@@ -22,7 +22,8 @@ def load_term_names(paths):
     """term -> name from comma-separated files; formats detected per file:
        - KEGG flat files (ko, pathway, module: ENTRY / NAME / DEFINITION blocks; KO: DEFINITION, else NAME)
        - TSV term<TAB>name (e.g. KEGG REST list/ko, list/pathway, list/module; prefixes ko:, path:, md: removed)
-       - Pfam-A.clans.tsv(.gz): accession, clan, clan name, short name, description -> description"""
+       - Pfam-A.clans.tsv(.gz): accession, clan, clan name, short name, description -> description
+       - NCBI COG definitions (cog-24.def.tab): COG id, category, name -> name"""
     n0 = len(TERM_NAMES)
     for p in [x.strip() for x in (paths or "").split(",") if x.strip()]:
         if not os.path.exists(p):
@@ -59,7 +60,9 @@ def load_term_names(paths):
                     if len(f) < 2 or not f[0]:
                         continue
                     term = re.sub(r"^(ko|path|md|map):", "", f[0].strip())
-                    name = f[4] if len(f) >= 5 and term.startswith("PF") else f[1]
+                    # Pfam-A.clans.tsv: description in column 5; NCBI cog-24.def.tab: COG id, category, name
+                    name = f[4] if len(f) >= 5 and term.startswith("PF") else (
+                        f[2] if len(f) >= 3 and re.match(r"COG\d{4}$", term) and len(f[1]) <= 3 else f[1])
                     TERM_NAMES.setdefault(term, name.strip())
         sys.stderr.write("[cohort] %d term names from %s\n" % (len(TERM_NAMES) - n1, p))
     return len(TERM_NAMES) - n0
