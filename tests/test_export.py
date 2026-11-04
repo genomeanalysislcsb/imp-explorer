@@ -465,6 +465,7 @@ def test_metabolomics_layer(tmp_path):
     assert len(m) and 1.3 < m["estimate"].iloc[0] < 2.7                # log2(4) = 2
     pm = read_table(str(out), "cohort_permanova")
     assert "metab.lipids" in set(pm["layer"])
+    assert read_manifest(str(out))["cohort"]["nmds"] == "all"
     od = read_table(str(out), "cohort_ordination")
     assert set(od[od["method"] == "NMDS"]["layer"]) == {"kraken.genus.mg", "metab.scfa", "metab.lipids"}
     st = read_manifest(str(out))["cohort"]["layers"]

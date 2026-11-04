@@ -56,6 +56,7 @@ def settings_dict(C, A, a):
                            "features": int(L.M.shape[1])} for k, L in C.layers.items()},
             "metrics": {m: METRIC_LABEL.get(m, m) for m in C.metric_names},
             "permutations": a.permutations, "sig_q": a.sig_q, "prevalence": a.prevalence, "qc_drop": a.qc_drop,
+            "nmds": a.nmds, "nmds_starts": getattr(a, "nmds_starts", None),
             "samples": len(C.samples), "kept": len(C.kept), "excluded": C.excluded,
             "config": os.path.abspath(a.config) if a.config else "", "from_config": a.from_config, "notes": C.log}
 
