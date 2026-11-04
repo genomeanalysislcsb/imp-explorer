@@ -205,6 +205,8 @@ class Analysis:
         C = self.C
         perm, disp, ords = [], [], []
         nmds_layers = {k.strip() for k in (self.a.nmds or "").split(",") if k.strip()}
+        if "all" in nmds_layers:                       # every layer with a beta diversity
+            nmds_layers = (nmds_layers - {"all"}) | {k for k, L in C.layers.items() if L.kind in ("counts", "metab", "auc")}
         for k in sorted(nmds_layers - set(C.layers)):
             C.note("NMDS for %s skipped: not an analysed layer" % k)
         P = self.a.permutations

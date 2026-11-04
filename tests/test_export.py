@@ -452,7 +452,7 @@ def test_metabolomics_layer(tmp_path):
     v = read_table(str(out), "metab_values")
     assert set(v["sample_id"]) == set(meta["sample_id"]) and v["source_id"].str.startswith("EB01_").all()
     rc = cohort.main(["--data", str(out), "--block", "site", "--group-order", "control,case_a,case_b",
-                      "--model", "group+site", "--permutations", "49", "--no-report",
+                      "--model", "group+site", "--permutations", "49", "--no-report", "--nmds", "all",
                       "--layers", "kraken.genus.mg,metab"])
     assert rc == 0
     t = read_table(str(out), "cohort_tests")
@@ -465,6 +465,8 @@ def test_metabolomics_layer(tmp_path):
     assert len(m) and 1.3 < m["estimate"].iloc[0] < 2.7                # log2(4) = 2
     pm = read_table(str(out), "cohort_permanova")
     assert "metab.lipids" in set(pm["layer"])
+    od = read_table(str(out), "cohort_ordination")
+    assert set(od[od["method"] == "NMDS"]["layer"]) == {"kraken.genus.mg", "metab.scfa", "metab.lipids"}
     st = read_manifest(str(out))["cohort"]["layers"]
     assert st["metab.scfa"]["label"] == "Metabolomics: Short-chain fatty acids" and st["metab.lipids"]["samples"] == 29
     try:
@@ -630,3 +632,4 @@ def test_nmds_names_from_srna_config(tmp_path):
                    'COHORT_NMDS_STARTS="${COHORT_NMDS_STARTS-10}"\n')
     a = settings.parse(["--data", str(tmp_path), "--config", str(cfg)])
     assert a.nmds == "kraken.genus.mg,kegg_pathway.mg" and a.nmds_starts == 10
+    assert settings.parse(["--data", str(tmp_path), "--config", str(cfg), "--nmds", "all"]).nmds == "all"

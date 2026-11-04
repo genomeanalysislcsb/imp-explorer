@@ -156,7 +156,7 @@ def parser():
     ap.add_argument("--qc-drop", default=None, choices=("FAIL", "WARN", "none"), help="samples left out  [FAIL]")
     ap.add_argument("--prevalence", type=float, default=None, help="features with >= 10 reads in at least this share "
                     "of samples are tested  [0.1]")
-    ap.add_argument("--nmds", default=None, help="layers with an NMDS ('' = none); sRNA-IMP names (genus, "
+    ap.add_argument("--nmds", default=None, help="layers with an NMDS ('all' = every layer, '' = none); sRNA-IMP names (genus, "
                     "fn_kegg_pathway) mean the metagenome layers (kraken.genus.mg, kegg_pathway.mg)")
     ap.add_argument("--nmds-starts", type=int, default=None, help="random starts per NMDS (+ 1 PCoA start)  [5]")
     ap.add_argument("--term-names", default=None, help="TSV(s) term<TAB>name or KEGG flat files for readable labels")
@@ -183,7 +183,9 @@ def nmds_layers(value):
     the metagenome layers here (kraken.genus.mg, kegg_pathway.mg); sRNA-only sets (mirna, rfam_*, ...) are left out"""
     out = []
     for k in [x.strip() for x in str(value or "").split(",") if x.strip()]:
-        if "." in k:
+        if k.lower() in ("all", "*"):
+            out.append("all")
+        elif "." in k:
             out.append(k)
         elif k in RANKS:
             out.append("kraken.%s.mg" % k)

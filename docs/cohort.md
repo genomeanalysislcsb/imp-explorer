@@ -103,7 +103,7 @@ analysis, so groups, reference, blocks and models are the same for all of them.
 | `--min-mt-pairs` | `min_mt_pairs` | 1e6 | below this, the sample is left out of the metatranscriptome layers (WARN) |
 | `--prevalence` | `prevalence` | 0.1 | features with ≥ 10 reads in at least this share of the samples are tested |
 | `--layers` | `layers` | see below | feature sets |
-| `--nmds` | `nmds` | `kraken.genus.mg,kegg_pathway.mg` | layers with an NMDS besides the PCoA. sRNA-IMP names (`COHORT_NMDS=genus,fn_kegg_pathway,...`) mean the metagenome layers (`kraken.genus.mg`, `kegg_pathway.mg`); sRNA-only sets are left out |
+| `--nmds` | `nmds` | `kraken.genus.mg,kegg_pathway.mg` | layers with an NMDS besides the PCoA; `all` = every layer (about 30 s per layer for 180 samples with 10 starts). sRNA-IMP names (`COHORT_NMDS=genus,fn_kegg_pathway,...`) mean the metagenome layers (`kraken.genus.mg`, `kegg_pathway.mg`); sRNA-only sets are left out |
 | `--nmds-starts` | `nmds_starts` | 5 | random starts per NMDS (+ 1 PCoA start); `COHORT_NMDS_STARTS` of the sRNA-IMP config |
 | `--out` | – | `<release>/cohort` | output directory |
 | `--no-release-tables`, `--no-report` | – | | skip the `cohort_*` release tables / the report |
