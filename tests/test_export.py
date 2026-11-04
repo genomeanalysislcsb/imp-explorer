@@ -634,3 +634,23 @@ def test_nmds_names_from_srna_config(tmp_path):
     a = settings.parse(["--data", str(tmp_path), "--config", str(cfg)])
     assert a.nmds == "kraken.genus.mg,kegg_pathway.mg" and a.nmds_starts == 10
     assert settings.parse(["--data", str(tmp_path), "--config", str(cfg), "--nmds", "all"]).nmds == "all"
+
+
+def test_beta_parallel_same_results():
+    """beta step in worker processes = the same numbers as in one process (fixed seeds, no hash order)"""
+    import numpy as np
+    from impexplorer.cohort.engine import beta_layer, run_parallel
+    rng = np.random.default_rng(0)
+    ss = ["S%02d" % i for i in range(24)]
+    grp = ["control", "case"] * 12
+    blk = ["site_%d" % (i % 3) for i in range(24)]
+    jobs = [{"key": "l%d" % k, "kind": "counts", "X": rng.random((24, 30)), "samples": ss, "group": grp,
+             "block": blk, "groups": ["control", "case"], "block_col": "site",
+             "comparisons": [("case vs control", "within", ss[1::2], ss[0::2])], "permutations": 99,
+             "nmds": k == 0, "nmds_starts": 2} for k in range(3)]
+    one = [beta_layer(j) for j in jobs]
+    par = run_parallel(beta_layer, jobs, 2)
+    for a, b in zip(one, par):
+        assert a[1] == b[1] and a[2] == b[2]
+        for x, y in zip(a[0], b[0]):
+            pd.testing.assert_frame_equal(x, y)

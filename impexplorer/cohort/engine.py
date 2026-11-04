@@ -202,72 +202,39 @@ class Analysis:
 
     # ------------------------------------------------------------------ beta diversity, dispersion, ordination
     def beta(self):
+        """PCoA (+ NMDS), PERMANOVA and dispersion per layer; layers run in parallel with --threads (same results:
+        every random step has a fixed seed)"""
         C = self.C
-        perm, disp, ords = [], [], []
         nmds_layers = {k.strip() for k in (self.a.nmds or "").split(",") if k.strip()}
         if "all" in nmds_layers:                       # every layer with a beta diversity
             nmds_layers = (nmds_layers - {"all"}) | {k for k, L in C.layers.items() if L.kind in ("counts", "metab", "auc")}
         for k in sorted(nmds_layers - set(C.layers)):
             C.note("NMDS for %s skipped: not an analysed layer" % k)
-        P = self.a.permutations
+        jobs = []
         for key, L in C.layers.items():
             if L.kind not in ("counts", "metab", "auc"):
                 continue
-            t0 = time.time()
             R = L.rel()
+            if L.kind == "metab":
+                R = R[L.tested(self.a.prevalence) or list(R.columns)]
             ss = list(R.index)
-            # counts: Bray-Curtis of relative abundances; metabolomics: Euclidean of autoscaled log values
-            D = bray_curtis(R.values) if L.kind in ("counts", "auc") else euclidean_z(R[L.tested(self.a.prevalence) or list(R.columns)].values)
-            pos = {s: i for i, s in enumerate(ss)}
-            X, expl = pcoa(D, 2)
-            o = pd.DataFrame({"layer": key, "sample_id": ss, "axis1": X[:, 0], "axis2": X[:, 1], "method": "PCoA",
-                              "group": [C.group(s) for s in ss], "block": [C.block_of(s) for s in ss]})
-            o.attrs["explained"] = list(map(float, expl))
-            o["explained1"], o["explained2"] = (float(expl[0]) if len(expl) else np.nan,
-                                                float(expl[1]) if len(expl) > 1 else np.nan)
-            ords.append(o)
-            if key in nmds_layers:
-                iso = isolated_samples(D)
-                keep = [i for i in range(len(ss)) if i not in iso]
-                Xn, stress = nmds(D[np.ix_(keep, keep)], k=2, starts=int(getattr(self.a, "nmds_starts", 5) or 5))
-                if Xn is not None:
-                    ords.append(pd.DataFrame({"layer": key, "sample_id": [ss[i] for i in keep], "axis1": Xn[:, 0],
-                                              "axis2": Xn[:, 1], "method": "NMDS",
-                                              "group": [C.group(ss[i]) for i in keep],
-                                              "block": [C.block_of(ss[i]) for i in keep],
-                                              "explained1": stress, "explained2": np.nan}))
-            gs = [s for s in ss if C.group(s) in C.groups]
-            if len(C.groups) >= 2 and len(gs) >= 6:
-                idx = [pos[s] for s in gs]
-                Dg = D[np.ix_(idx, idx)]
-                lab = np.array([C.group(s) for s in gs], object)
-                blk = np.array([C.block_of(s) for s in gs], object) if C.block else None
-                F, r2, p = permanova(Dg, lab, P, strata=blk)
-                perm.append([key, "all groups" + (" (permuted within %s)" % C.block if C.block else ""), "groups",
-                             len(gs), F, r2, p])
-                if C.block and len(set(blk)) > 1:
-                    F, r2, p = permanova_partial(Dg, lab, blk, P)
-                    perm.append([key, "groups | %s (partial)" % C.block, "partial", len(gs), F, r2, p])
-                    F, r2, p = permanova_partial(Dg, blk, lab, P)
-                    perm.append([key, "%s | groups (partial)" % C.block, "partial", len(gs), F, r2, p])
-            for lab_, kind, A, B in self.comparisons(ss):
-                ids = A + B
-                idx = [pos[s] for s in ids]
-                Dc = D[np.ix_(idx, idx)]
-                lab = np.array(["a"] * len(A) + ["b"] * len(B), object)
-                blk = np.array([C.block_of(s) for s in ids], object)
-                F, r2, p = permanova(Dc, lab, P, strata=blk if kind == "within" and len(set(blk)) > 1 else None)
-                perm.append([key, lab_, kind, len(ids), F, r2, p])
-                # dispersion: distance to the own centroid in the full PCoA space of the comparison
-                Xf, _ = pcoa(Dc, k=len(ids) - 1)
-                d = np.zeros(len(ids))
-                for g in ("a", "b"):
-                    i = lab == g
-                    d[i] = np.sqrt(((Xf[i] - Xf[i].mean(axis=0)) ** 2).sum(axis=1))
-                auc, p = mannwhitney(d[lab == "a"], d[lab == "b"])
-                ma, mb = float(np.median(d[lab == "a"])), float(np.median(d[lab == "b"]))
-                disp.append([key, lab_, kind, len(A), len(B), ma, mb, ma / mb if mb else np.nan, p])
-            self.timing["beta " + key] = time.time() - t0
+            jobs.append({"key": key, "kind": L.kind, "X": R.values.astype(float), "samples": ss,
+                         "group": [C.group(s) for s in ss], "block": [C.block_of(s) for s in ss],
+                         "groups": list(C.groups), "block_col": C.block, "comparisons": self.comparisons(ss),
+                         "permutations": self.a.permutations, "nmds": key in nmds_layers,
+                         "nmds_starts": int(getattr(self.a, "nmds_starts", 5) or 5)})
+        threads = max(1, int(getattr(self.a, "threads", 1) or 1))
+        if threads > 1 and len(jobs) > 1:
+            results = run_parallel(beta_layer, jobs, threads)
+            C.note("beta diversity: %d layers on %d processes" % (len(jobs), min(threads, len(jobs))))
+        else:
+            results = [beta_layer(j) for j in jobs]
+        perm, disp, ords = [], [], []
+        for j, (o, p_, d_, secs) in zip(jobs, results):
+            ords += o
+            perm += p_
+            disp += d_
+            self.timing["beta " + j["key"]] = secs
         pm = pd.DataFrame(perm, columns=["layer", "comparison", "kind", "n", "F", "R2", "p"])
         pm["q"] = bh(pm["p"].values) if len(pm) else []
         self.res["permanova"] = pm
@@ -556,3 +523,90 @@ class Analysis:
                 if len(d):
                     out.append(("MAGs", "%s: MAG recovery differs for %s" % (c[2:], ", ".join(d["genus"].head(8)))))
         return out
+
+
+# ---------------------------------------------------------------------- beta diversity of one layer (worker)
+def beta_layer(j):
+    """one layer: distances, PCoA, NMDS (if asked), PERMANOVA (all groups, partial for group and block, every
+    comparison) and dispersion; plain data in and out, so it runs in a separate process"""
+    t0 = time.time()
+    key, ss, P = j["key"], j["samples"], j["permutations"]
+    grp, blkall = dict(zip(ss, j["group"])), dict(zip(ss, j["block"]))
+    X = j["X"]
+    # counts / proteins: Bray-Curtis of relative abundances; metabolomics: Euclidean of autoscaled log values
+    D = bray_curtis(X) if j["kind"] in ("counts", "auc") else euclidean_z(X)
+    pos = {s: i for i, s in enumerate(ss)}
+    ords, perm, disp = [], [], []
+    Xp, expl = pcoa(D, 2)
+    o = pd.DataFrame({"layer": key, "sample_id": ss, "axis1": Xp[:, 0], "axis2": Xp[:, 1], "method": "PCoA",
+                      "group": j["group"], "block": j["block"]})
+    o["explained1"], o["explained2"] = (float(expl[0]) if len(expl) else np.nan,
+                                        float(expl[1]) if len(expl) > 1 else np.nan)
+    ords.append(o)
+    if j["nmds"]:
+        iso = isolated_samples(D)
+        keep = [i for i in range(len(ss)) if i not in iso]
+        Xn, stress = nmds(D[np.ix_(keep, keep)], k=2, starts=j["nmds_starts"])
+        if Xn is not None:
+            ords.append(pd.DataFrame({"layer": key, "sample_id": [ss[i] for i in keep], "axis1": Xn[:, 0],
+                                      "axis2": Xn[:, 1], "method": "NMDS",
+                                      "group": [grp[ss[i]] for i in keep], "block": [blkall[ss[i]] for i in keep],
+                                      "explained1": stress, "explained2": np.nan}))
+    groups, bcol = j["groups"], j["block_col"]
+    gs = [s for s in ss if grp[s] in groups]
+    if len(groups) >= 2 and len(gs) >= 6:
+        idx = [pos[s] for s in gs]
+        Dg = D[np.ix_(idx, idx)]
+        lab = np.array([grp[s] for s in gs], object)
+        blk = np.array([blkall[s] for s in gs], object) if bcol else None
+        F, r2, p = permanova(Dg, lab, P, strata=blk)
+        perm.append([key, "all groups" + (" (permuted within %s)" % bcol if bcol else ""), "groups", len(gs), F, r2, p])
+        if bcol and len(set(blk)) > 1:
+            F, r2, p = permanova_partial(Dg, lab, blk, P)
+            perm.append([key, "groups | %s (partial)" % bcol, "partial", len(gs), F, r2, p])
+            F, r2, p = permanova_partial(Dg, blk, lab, P)
+            perm.append([key, "%s | groups (partial)" % bcol, "partial", len(gs), F, r2, p])
+    for lab_, kind, A, B in j["comparisons"]:
+        ids = A + B
+        idx = [pos[s] for s in ids]
+        Dc = D[np.ix_(idx, idx)]
+        lab = np.array(["a"] * len(A) + ["b"] * len(B), object)
+        blk = np.array([blkall[s] for s in ids], object)
+        F, r2, p = permanova(Dc, lab, P, strata=blk if kind == "within" and len(set(blk)) > 1 else None)
+        perm.append([key, lab_, kind, len(ids), F, r2, p])
+        # dispersion: distance to the own centroid in the full PCoA space of the comparison
+        Xf, _ = pcoa(Dc, k=len(ids) - 1)
+        d = np.zeros(len(ids))
+        for g in ("a", "b"):
+            i = lab == g
+            d[i] = np.sqrt(((Xf[i] - Xf[i].mean(axis=0)) ** 2).sum(axis=1))
+        auc, p = mannwhitney(d[lab == "a"], d[lab == "b"])
+        ma, mb = float(np.median(d[lab == "a"])), float(np.median(d[lab == "b"]))
+        disp.append([key, lab_, kind, len(A), len(B), ma, mb, ma / mb if mb else np.nan, p])
+    return ords, perm, disp, time.time() - t0
+
+
+def run_parallel(fn, jobs, threads):
+    """fn over jobs in `threads` processes (spawn: no fork of a process that runs threads), results in job order;
+    one BLAS thread per process so the processes do not compete for the cores"""
+    import multiprocessing as mp
+    import os
+    from concurrent.futures import ProcessPoolExecutor
+    keys = ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS", "NUMEXPR_NUM_THREADS")
+    old = {k: os.environ.get(k) for k in keys}
+    os.environ.update({k: "1" for k in keys})            # read by numpy when the worker starts
+    try:
+        # largest layers first, so a big one does not start last
+        order = sorted(range(len(jobs)), key=lambda i: -jobs[i]["X"].size - (10 ** 9 if jobs[i]["nmds"] else 0))
+        out = [None] * len(jobs)
+        with ProcessPoolExecutor(max_workers=min(threads, len(jobs)), mp_context=mp.get_context("spawn")) as ex:
+            futs = {ex.submit(fn, jobs[i]): i for i in order}
+            for f, i in futs.items():
+                out[i] = f.result()
+        return out
+    finally:
+        for k, v in old.items():
+            if v is None:
+                os.environ.pop(k, None)
+            else:
+                os.environ[k] = v

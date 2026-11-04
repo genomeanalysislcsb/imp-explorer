@@ -596,7 +596,7 @@ def permanova(D, labels, perms=999, seed=1, strata=None):
     groups_ = None
     if strata is not None:                       # permutations only within strata (blocks)
         strata = np.asarray(strata, object)
-        groups_ = [np.where(strata == s_)[0] for s_ in set(strata)]
+        groups_ = [np.where(strata == s_)[0] for s_ in sorted(set(strata), key=str)]
 
     def shuffle():
         if groups_ is None:
@@ -631,7 +631,7 @@ def permanova_partial(D, labels, strata, perms=999, seed=1):
     stat = lambda wc: ((w_s - wc) / df1) / (wc / df2) if wc > 0 else float("inf")
     f = stat(w_c)
     rng = np.random.default_rng(seed)
-    groups_ = [np.where(strata == s_)[0] for s_ in set(strata)]
+    groups_ = [np.where(strata == s_)[0] for s_ in sorted(set(strata), key=str)]
     ge = 0
     for _ in range(perms):
         out = labels.copy()

@@ -163,7 +163,8 @@ def parser():
     ap.add_argument("--name", default=None, help="title of the report  [study name]")
     ap.add_argument("--no-release-tables", action="store_true", help="do not write cohort_* tables into the release")
     ap.add_argument("--no-report", action="store_true", help="TSVs only")
-    ap.add_argument("--threads", type=int, default=1, help="(reserved)")
+    ap.add_argument("--threads", type=int, default=1, help="processes for the beta-diversity step (PCoA, NMDS, "
+                    "PERMANOVA per layer); same results as 1  [1]")
     return ap
 
 

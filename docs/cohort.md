@@ -105,6 +105,7 @@ analysis, so groups, reference, blocks and models are the same for all of them.
 | `--layers` | `layers` | see below | feature sets |
 | `--nmds` | `nmds` | `kraken.genus.mg,kegg_pathway.mg` | layers with an NMDS besides the PCoA; `all` = every layer (about 30 s per layer for 180 samples with 10 starts). sRNA-IMP names (`COHORT_NMDS=genus,fn_kegg_pathway,...`) mean the metagenome layers (`kraken.genus.mg`, `kegg_pathway.mg`); sRNA-only sets are left out |
 | `--nmds-starts` | `nmds_starts` | 5 | random starts per NMDS (+ 1 PCoA start); `COHORT_NMDS_STARTS` of the sRNA-IMP config |
+| `--threads` | – | 1 | processes for the beta-diversity step (PCoA, NMDS, PERMANOVA, dispersion per layer); the results are the same as with 1. With many layers and `--nmds all`, use the cores of the node, e.g. `--threads 16` |
 | `--out` | – | `<release>/cohort` | output directory |
 | `--no-release-tables`, `--no-report` | – | | skip the `cohort_*` release tables / the report |
 
