@@ -39,6 +39,7 @@ nav:
       - IMP3 files read: imp3-files.md
       - Plug-ins and study portals: plugins.md
   - Development: development.md
+  - Changelog: changelog.md
 
 markdown_extensions:
   - admonition

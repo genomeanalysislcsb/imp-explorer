@@ -4,8 +4,9 @@
 [![docs](https://img.shields.io/badge/docs-genomeanalysislcsb.github.io%2Fimp--explorer-blue)](https://genomeanalysislcsb.github.io/imp-explorer/)
 
 **Documentation: <https://genomeanalysislcsb.github.io/imp-explorer/>**
+Changes per version: [CHANGELOG.md](CHANGELOG.md).
 
-Interactive exploration of [IMP3](https://gitlab.com/uniluxembourg/lcsb/systems-ecology/imp/imp3) results
+Interactive exploration of [IMP3](https://github.com/genomeanalysislcsb/IMP3) results
 (metagenomics + metatranscriptomics), with sRNA-IMP, metaproteomics and metabolomics results as optional layers. Stand-alone tool, and the core of
 study portals that add their own layers and pages.
 

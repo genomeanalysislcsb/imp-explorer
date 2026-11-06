@@ -40,3 +40,9 @@ taken from this demo study.
 2. Read the file in `readers/imp3.py`; return an empty frame when the file is missing.
 3. Write the format into `tests/make_fixture.py` and test it in `tests/test_export.py`.
 4. Show it on a page.
+
+## Releases
+
+Raise the version in `pyproject.toml` and `impexplorer/__init__.py`, add the changes to `CHANGELOG.md` and copy it
+to `docs/changelog.md` (the docs page), tag `vX.Y.Z` and publish a GitHub release: Zenodo archives it and gives it a
+DOI.
