@@ -654,3 +654,50 @@ def test_beta_parallel_same_results():
         assert a[1] == b[1] and a[2] == b[2]
         for x, y in zip(a[0], b[0]):
             pd.testing.assert_frame_equal(x, y)
+
+
+def test_metadata_template_check_and_dictionary(tmp_path):
+    """metadata template from a release, check of a table with typical problems, clean table, dictionary types
+    in the cohort analysis (a 0/1/2 code becomes categorical)"""
+    from impexplorer import metadata
+    from impexplorer.cohort.data import Cohort
+    from impexplorer.cohort.settings import parse
+    root = make_fixture.main(str(tmp_path), n=12)
+    out = tmp_path / "release"
+    export.main(["--imp-root", root, "--metadata", str(tmp_path / "metadata.tsv"), "--out", str(out)])
+    assert metadata.main(["template", "--out", str(tmp_path / "md"), "--data", str(out)]) == 0
+    dct = pd.read_csv(tmp_path / "md" / "metadata.dictionary.tsv", sep="\t", dtype=str, keep_default_na=False)
+    assert set(dct.loc[dct["column"] == "group", "allowed"].iloc[0].split("|")) == {"control", "case_a", "case_b"}
+    tmpl = pd.read_csv(tmp_path / "md" / "metadata.template.tsv", sep="\t", dtype=str, keep_default_na=False)
+    assert len(tmpl) == 12 and tmpl["sex"].isin(["F", "M"]).all()
+    # a filled-in table with problems
+    md = tmpl[["sample_id", "group", "site", "sex", "age"]].copy()
+    md["sex"] = md["sex"].replace({"F": "f"})                      # case only: warning, fixed
+    md.loc[0, "age"] = "61,5"                                      # decimal comma: warning, read
+    md.loc[1, "age"] = "unknown"                                   # missing code
+    md.loc[2, "age"] = "sixty"                                     # not a number: error
+    md["bristol_stool_scale"] = ["4"] * 11 + ["2.5"]               # not an integer: error
+    md["smoking"] = ["0", "1", "2"] * 4                            # codes, categorical in the dictionary
+    md = pd.concat([md, md.iloc[[3]]])                             # duplicated id: error
+    p = tmp_path / "filled.tsv"
+    md.to_csv(p, sep="\t", index=False)
+    d2 = dct.copy()
+    d2.loc[d2["column"] == "smoking", "allowed"] = "0|1|2"
+    pd2 = tmp_path / "dict.tsv"
+    d2.to_csv(pd2, sep="\t", index=False)
+    rc = metadata.main(["check", "--metadata", str(p), "--dictionary", str(pd2), "--data", str(out),
+                        "--report", str(tmp_path / "issues.tsv"), "--write-clean", str(tmp_path / "clean.tsv")])
+    assert rc == 1
+    iss = pd.read_csv(tmp_path / "issues.tsv", sep="\t", dtype=str, keep_default_na=False)
+    msg = " | ".join(iss["level"] + " " + iss["column"] + " " + iss["message"])
+    for want in ("ERROR sample_id 2 rows with a duplicated", "ERROR age 1 values are not numbers",
+                 "WARN age 1 values with a decimal comma", "WARN sex", "ERROR bristol_stool_scale 1 values are not whole"):
+        assert want in msg, (want, msg)
+    clean = pd.read_csv(tmp_path / "clean.tsv", sep="\t", dtype=str, keep_default_na=False)
+    assert clean.loc[0, "age"] == "61.5" and clean.loc[1, "age"] == "" and set(clean["sex"]) <= {"F", "M"}
+    # dictionary in the cohort analysis: smoking (0/1/2) categorical, age numeric
+    a = parse(["--data", str(out), "--metadata", str(tmp_path / "clean.tsv"), "--dictionary", str(pd2)])
+    C = Cohort(a)
+    assert C.kinds["smoking"] == "categorical" and C.kinds["age"] == "numeric"
+    a2 = parse(["--data", str(out), "--metadata", str(tmp_path / "clean.tsv")])
+    assert Cohort(a2).kinds["smoking"] == "numeric"

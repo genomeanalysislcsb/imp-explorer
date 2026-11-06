@@ -73,6 +73,9 @@ class Cohort:
         self.unmatched_meta = []
         if a.metadata:
             s = self._merge_metadata(s, a.metadata, a.id_col)
+        dict_kinds = {}
+        if getattr(a, "dictionary", ""):
+            s, dict_kinds = self._apply_dictionary(s, a.dictionary)
         self.samples = s.set_index("sample_id")
         self._qct = read_table(a.data, "qc")
         self._metrics = self.metrics_table()
@@ -93,9 +96,12 @@ class Cohort:
         hidden = {"imp_dir", "has_mg", "has_mt"}
         self.meta_cols = [c for c in self.samples.columns if c not in hidden]
         self.kinds = {c: column_kind([self._s(v) for v in self.samples[c]]) for c in self.meta_cols}
+        for c, k in dict_kinds.items():          # the dictionary decides numeric / categorical; text / dates are no
+            if c in self.kinds and self.kinds[c] != "empty":   # covariates
+                self.kinds[c] = k
         cov = [c.strip() for c in (a.covariates or "").split(",") if c.strip()]
         self.covariates = [c for c in (cov or self.meta_cols) if c in self.meta_cols and c != gc
-                           and self.kinds.get(c) != "empty"]
+                           and self.kinds.get(c) not in ("empty", "text")]
         self.qc_flags = self.flag_samples()
         drop = {"FAIL": ("FAIL",), "WARN": ("FAIL", "WARN"), "none": ()}[a.qc_drop]
         self.kept = [x for x in self.samples.index if self.qc_flags.loc[x, "level"] not in drop]
@@ -123,6 +129,23 @@ class Cohort:
         self.note("metadata %s: %d of %d samples matched, %d metadata ids without IMP3 output"
                   % (os.path.basename(path), n, len(s), len(self.unmatched_meta)))
         return s
+
+    def _apply_dictionary(self, s, path):
+        """metadata dictionary: missing codes -> NA, numbers / categories normalised, kinds per column"""
+        from ..metadata import normalize, read_dictionary
+        dct = read_dictionary(path)
+        cols = [c for c in s.columns if c in dct and c != "sample_id"]
+        sub = s[cols].fillna("").astype(str)
+        clean, issues, kinds = normalize(sub, dct)
+        for c in cols:
+            s[c] = clean[c].replace("", np.nan)
+        for lvl, col, msg, ex in issues:
+            if lvl == "ERROR":
+                self.note("dictionary: %s: %s (set to NA)%s" % (col, msg, (" e.g. " + ", ".join(map(str, ex))) if ex else ""))
+        self.note("dictionary %s: %d columns typed (%d numeric, %d categorical)" % (
+            os.path.basename(path), len(kinds), sum(1 for k in kinds.values() if k == "numeric"),
+            sum(1 for k in kinds.values() if k == "categorical")))
+        return s, kinds
 
     def note(self, msg):
         self.log.append(msg)

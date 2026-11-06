@@ -30,6 +30,10 @@ imp-explorer export --imp-root /path/to/IMP3_outputs --id-regex 'run_(\w+)' --id
 # or an explicit sheet: sample_id, imp_dir, (metadata columns ...)
 imp-explorer export --samples /path/to/samples.tsv --out /path/to/release_v0.1
 
+# sample metadata: dictionary + template, check before export / cohort (types, units, categories, ids)
+imp-explorer metadata template --out metadata/ --data /path/to/release_v0.1
+imp-explorer metadata check --metadata clinical.tsv --dictionary metadata/metadata.dictionary.tsv --data /path/to/release_v0.1
+
 # optional: cohort statistics (group comparisons within blocks, adjusted models, report, app page)
 imp-explorer cohort --data /path/to/release_v0.1 --block site --model "group+site, group+site+sex+age"
 # ... or with the design in a settings file of the study (template: --write-config; an sRNA-IMP config works too)

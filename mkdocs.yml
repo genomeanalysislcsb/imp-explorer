@@ -27,6 +27,7 @@ nav:
   - Getting started:
       - Installation: installation.md
       - Export IMP3 results: export.md
+      - Sample metadata: metadata.md
       - Run the app: running.md
       - Cohort analysis: cohort.md
       - sRNA layer: srna.md

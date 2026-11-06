@@ -85,6 +85,7 @@ analysis, so groups, reference, blocks and models are the same for all of them.
 | option | key in the settings file | default | meaning |
 |---|---|---|---|
 | `--metadata` | `metadata` | – | extra metadata (TSV/CSV) merged on the sample id. Ids match exactly, case-insensitively, or before the first `.` (`S01.t0` → `S01`). |
+| `--dictionary` | `dictionary` | – | metadata dictionary ([Sample metadata](metadata.md)): its types decide numeric / categorical columns, its missing codes become NA |
 | `--id-col` | `id_col` | first column | id column of `--metadata` |
 | `--group-col` | `group_col` | `group` | group column |
 | `--group-order` | `group_order` | sorted | order of the groups |

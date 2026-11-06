@@ -16,11 +16,11 @@ SRNA_KEYS = {
     "COHORT_BLOCK": "block", "COHORT_MATCH_COL": "block", "COHORT_REFERENCE": "reference",
     "COHORT_OUTLIER_Z": "outlier_z", "COHORT_SIG_Q": "sig_q", "COHORT_TERM_NAMES": "term_names",
     "COHORT_NAME": "name", "COHORT_MODEL": "model", "COHORT_MODEL_NOTES": "model_notes",
-    "COHORT_QC_DROP": "qc_drop",
+    "COHORT_QC_DROP": "qc_drop", "COHORT_DICTIONARY": "dictionary",
 }
 
 ALIASES = {"match_col": "block", "group": "group_col", "groups": "group_order", "title": "name"}
-CONFIG_KEYS = ("metadata", "id_col", "group_col", "group_order", "reference", "block", "covariates", "model",
+CONFIG_KEYS = ("metadata", "dictionary", "id_col", "group_col", "group_order", "reference", "block", "covariates", "model",
                "model_notes", "permutations", "sig_q", "outlier_z", "qc_drop", "term_names", "name", "layers",
                "prevalence", "min_mg_pairs", "min_mt_pairs", "nmds", "nmds_starts")
 IGNORED = {"dir", "min_mirna_reads"}       # sRNA-specific COHORT_* keys without meaning here
@@ -95,6 +95,7 @@ TEMPLATE = """# imp-explorer cohort settings (imp-explorer cohort --config this_
 # key: value; empty = default. Keys also work as COHORT_<KEY>="..." (bash), e.g. in an sRNA-IMP config.
 name:                     # report title  [study name of the release]
 metadata:                 # extra metadata TSV/CSV merged on the sample id
+dictionary:               # metadata.dictionary.tsv: column types (numeric / categorical), missing codes
 id_col:                   # id column of the metadata  [first column]
 group_col: group          # group column
 group_order:              # e.g. control,case_a,case_b
@@ -135,6 +136,8 @@ def parser():
                     help="write a commented settings template (with the options given) and exit")
     ap.add_argument("--metadata", default=None, help="extra metadata TSV/CSV merged on the sample id "
                     "(columns override those of the release)")
+    ap.add_argument("--dictionary", default=None, help="metadata dictionary (imp-explorer metadata template): its "
+                    "types decide numeric / categorical columns (e.g. 0/1 or 1-7 codes), its missing codes become NA")
     ap.add_argument("--id-col", default=None, help="sample id column of --metadata  [first column]")
     ap.add_argument("--group-col", default=None, help="group column  [group]")
     ap.add_argument("--group-order", default=None, help="comma-separated group order, e.g. control,case_a,case_b")
@@ -168,7 +171,7 @@ def parser():
     return ap
 
 
-DEFAULTS = {"metadata": "", "id_col": "", "group_col": "group", "group_order": "", "reference": "", "block": "",
+DEFAULTS = {"metadata": "", "dictionary": "", "id_col": "", "group_col": "group", "group_order": "", "reference": "", "block": "",
             "covariates": "", "model": "", "model_notes": "", "permutations": 999, "sig_q": 0.1, "outlier_z": 4.0,
             "qc_drop": "FAIL", "term_names": "", "name": "", "layers": DEFAULT_LAYERS, "prevalence": 0.1,
             "min_mg_pairs": 1e6, "min_mt_pairs": 1e6, "nmds": "kraken.genus.mg,kegg_pathway.mg", "nmds_starts": 5}
