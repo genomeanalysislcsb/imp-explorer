@@ -58,4 +58,9 @@ imp-explorer run --data /path/to/release_v0.1          # http://127.0.0.1:8050
 
 ## Citation and licence
 
+Cite the version you used: IMP explorer, Zenodo,
+[doi:10.5281/zenodo.24007260](https://doi.org/10.5281/zenodo.24007260) (all versions; each release has its own DOI on
+the record page). For the data, cite [IMP3](https://github.com/genomeanalysislcsb/IMP3) and the tools it ran, and
+[sRNA-IMP](https://github.com/genomeanalysislcsb/sRNA-IMP) if the sRNA layer is used.
+
 MIT licence. LCSB BioCore, University of Luxembourg.

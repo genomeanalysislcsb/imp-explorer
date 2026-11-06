@@ -2,6 +2,7 @@
 
 [![tests](https://github.com/genomeanalysislcsb/imp-explorer/actions/workflows/tests.yml/badge.svg)](https://github.com/genomeanalysislcsb/imp-explorer/actions/workflows/tests.yml)
 [![docs](https://img.shields.io/badge/docs-genomeanalysislcsb.github.io%2Fimp--explorer-blue)](https://genomeanalysislcsb.github.io/imp-explorer/)
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.24007260.svg)](https://doi.org/10.5281/zenodo.24007260)
 
 **Documentation: <https://genomeanalysislcsb.github.io/imp-explorer/>**
 Changes per version: [CHANGELOG.md](CHANGELOG.md).
@@ -109,7 +110,10 @@ All files may be gzipped; missing files give empty tables (partly finished sampl
 python3 tests/run_tests.py      # synthetic IMP3 tree in the real file formats (tests/make_fixture.py)
 ```
 
-## Licence
+## Citation and licence
+
+Cite the version you used: IMP explorer, Zenodo, [doi:10.5281/zenodo.24007260](https://doi.org/10.5281/zenodo.24007260)
+(all versions; each release has its own DOI on the record page), and IMP3 / sRNA-IMP for the data.
 
 MIT, LCSB BioCore, University of Luxembourg. Related: [IMP3](https://github.com/genomeanalysislcsb/IMP3),
 [sRNA-IMP](https://github.com/genomeanalysislcsb/sRNA-IMP).
