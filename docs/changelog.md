@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+- **Sample QC per layer** (`imp-explorer qc`, table `sample_qc`): every sample keeps its place in the release and
+  gets a status (PASS, WARN, FAIL, missing) in each layer, from automatic rules, the sRNA-IMP verdicts and a manual
+  flags file (e.g. a paper's exclusions with their reasons). The app has a QC switch in the top bar (all samples /
+  without FAIL / PASS only) that every page applies per layer, and the Overview shows the sample x layer grid and
+  the flagged samples.
+
 ## 0.3.0 (2026-11)
 
 Optional data layers next to the IMP3 metagenome (mg) and metatranscriptome (mt), each imported into a release by

@@ -15,6 +15,7 @@ SRNA_TABLES = ("srna_samples", "srna_qc", "srna_features", "srna_tests", "srna_m
                "srna_permanova", "srna_dispersion", "srna_ordination", "srna_covariates")   # 'imp-explorer srna'
 PROT_TABLES = ("prot_taxonomy", "prot_functions", "prot_samples", "prot_proteins", "prot_abundance")  # 'proteomics'
 METAB_TABLES = ("metab_assays", "metab_features", "metab_values", "metab_samples")    # 'imp-explorer metabolomics'
+QC_TABLES = ("sample_qc",)                                                            # 'imp-explorer qc'
 # views over the cohort results of IMP3 and of sRNA-IMP (same columns where they mean the same)
 UNION_VIEWS = {"all_tests": ("cohort_tests", "srna_tests"), "all_models": ("cohort_models", "srna_models"),
                "all_models_overview": ("cohort_models_overview", "srna_models_overview"),
@@ -31,7 +32,8 @@ class Data:
         self.study = self.manifest.get("study") or os.path.basename(self.release)
         self._local = threading.local()
         self.tables = {}
-        for name in tuple(CORE_TABLES) + COHORT_TABLES + SRNA_TABLES + METAB_TABLES + PROT_TABLES + tuple(extra_tables):
+        for name in (tuple(CORE_TABLES) + COHORT_TABLES + SRNA_TABLES + METAB_TABLES + PROT_TABLES + QC_TABLES
+                     + tuple(extra_tables)):
             p = table_path(self.release, name)
             if p:
                 self.tables[name] = p
@@ -63,6 +65,11 @@ class Data:
         self.meta_cols = [c for c in self.samples.columns if c not in HIDDEN_COLS | {"sample_id", "has_mg", "has_mt"}]
         # columns usable for grouping: few distinct values
         self.group_cols = [c for c in self.meta_cols if 1 < self.samples[c].nunique(dropna=True) <= 12]
+        # QC status per sample and layer ('imp-explorer qc'); {layer: {sample_id: (status, reasons)}}
+        self.sample_qc = {}
+        if "sample_qc" in self.tables:
+            for r in self.q("SELECT sample_id, layer, status, reasons FROM sample_qc").itertuples(index=False):
+                self.sample_qc.setdefault(str(r.layer), {})[str(r.sample_id)] = (str(r.status), r.reasons or "")
 
     @staticmethod
     def _reader(p):
@@ -99,6 +106,22 @@ class Data:
         if filter_col and filter_vals:
             s = s[s[filter_col].astype(str).isin([str(v) for v in filter_vals])]
         return s
+
+    def qc_drop(self, layer, mode):
+        """sample ids to leave out of `layer` for QC mode 'all' (none), 'nofail' (FAIL) or 'pass' (FAIL + WARN);
+        samples without data in the layer ('missing') are not in its tables anyway"""
+        if not mode or mode == "all" or not layer:
+            return set()
+        drop = ("FAIL",) if mode == "nofail" else ("FAIL", "WARN")
+        return {s for s, (st, _) in self.sample_qc.get(str(layer), {}).items() if st in drop}
+
+    def qc_layer(self, layer):
+        """the QC layer of an omic / fraction / assay name as used in the tables (mg, mt, srna_int, mp_extra,
+        metab.<assay>); None when the release has no QC for it"""
+        if layer is None:
+            return None
+        layer = str(layer)
+        return layer if layer in self.sample_qc else None
 
     def group_of(self, group_col, samples=None):
         s = self.samples if samples is None else samples

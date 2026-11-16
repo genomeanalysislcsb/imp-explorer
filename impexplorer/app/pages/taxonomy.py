@@ -86,11 +86,11 @@ def register(app, data):
                   Input("tx-prof", "value"), Input("tx-top", "value"), Input("tx-view", "value"),
                   Input("tx-hrows", "value"), Input("tx-hcols", "value"), Input("tx-hval", "value"),
                   Input("tx-hann", "value"),
-                  Input(GLOBAL[0], "value"), Input(GLOBAL[1], "value"), Input(GLOBAL[2], "value"))
-    def _main(prof, top, view, hrows, hcols, hval, hann, group, fcol, fval):
+                  Input(GLOBAL[0], "value"), Input(GLOBAL[1], "value"), Input(GLOBAL[2], "value"), Input(GLOBAL[3], "value"))
+    def _main(prof, top, view, hrows, hcols, hval, hann, group, fcol, fval, qcm=None):
         if not prof:
             return empty_fig(), empty_fig(), None, [], None
-        s, g, cmap = selection(data, group, fcol, fval)
+        s, g, cmap = selection(data, group, fcol, fval, qcm, prof.split("|")[1])
         M = load(data, prof, s)
         if M.empty:
             return empty_fig(), empty_fig(), None, [], None
@@ -130,11 +130,11 @@ def register(app, data):
 
     @app.callback(Output("tx-box", "figure"), Output("tx-mgmt", "figure"), Input("tx-taxon", "value"),
                   State("tx-prof", "value"), Input("tx-scale", "value"),
-                  Input(GLOBAL[0], "value"), Input(GLOBAL[1], "value"), Input(GLOBAL[2], "value"))
-    def _taxon(taxon, prof, scale, group, fcol, fval):
+                  Input(GLOBAL[0], "value"), Input(GLOBAL[1], "value"), Input(GLOBAL[2], "value"), Input(GLOBAL[3], "value"))
+    def _taxon(taxon, prof, scale, group, fcol, fval, qcm=None):
         if not taxon or not prof:
             return empty_fig("choose a taxon"), empty_fig("choose a taxon")
-        s, g, cmap = selection(data, group, fcol, fval)
+        s, g, cmap = selection(data, group, fcol, fval, qcm, prof.split("|")[1])
         src, omic, rank = prof.split("|")
         d = data.q("SELECT sample_id, omic, rel_abundance FROM taxonomy WHERE source=? AND rank=? AND taxon=? "
                    "AND sample_id IN (SELECT UNNEST(?::VARCHAR[]))", [src, rank, taxon, list(s["sample_id"])])
@@ -169,17 +169,17 @@ def register(app, data):
 
     if data.has("prot_taxonomy"):
         @app.callback(Output("tx-omics", "figure"), Input("tx-taxon", "value"), State("tx-prof", "value"),
-                      Input(GLOBAL[0], "value"), Input(GLOBAL[1], "value"), Input(GLOBAL[2], "value"))
-        def _omics(taxon, prof, group, fcol, fval):
+                      Input(GLOBAL[0], "value"), Input(GLOBAL[1], "value"), Input(GLOBAL[2], "value"), Input(GLOBAL[3], "value"))
+        def _omics(taxon, prof, group, fcol, fval, qcm=None):
             if not taxon or not prof:
                 return empty_fig("choose a taxon")
             s, g, cmap = selection(data, group, fcol, fval)
             rank = prof.split("|")[2]
-            return omics_boxes(across_omics(data, rank, taxon, s), g, cmap, "%s (%s)" % (taxon, rank),
+            return omics_boxes(across_omics(data, rank, taxon, s, qcm), g, cmap, "%s (%s)" % (taxon, rank),
                                "% of the profile (reads; proteins: AUC)")
 
 
-def across_omics(data, rank, taxon, samples):
+def across_omics(data, rank, taxon, samples, qcm=None):
     """{label: Series(sample -> %)} of one taxon: Kraken2 mg / mt and the metaproteome fractions"""
     ids = list(samples["sample_id"])
     d = data.q("SELECT sample_id, source, omic, rel_abundance FROM taxonomy WHERE rank=? AND taxon=? AND source IN "
@@ -191,6 +191,7 @@ def across_omics(data, rank, taxon, samples):
     for (src, o), x in have.groupby(["source", "omic"]):
         keep = [i for i in ids if i in set(x["sample_id"])]
         v = d[(d["source"] == src) & (d["omic"] == o)].set_index("sample_id")["rel_abundance"]
+        keep = [i for i in keep if i not in data.qc_drop(o, qcm)]
         out["%s %s" % ("Kraken2" if src == "kraken2_bracken" else "proteins", o)] = v.reindex(keep).fillna(0) * 100
     order = ["Kraken2 mg", "Kraken2 mt"]
     return dict(sorted(out.items(), key=lambda kv: (order.index(kv[0]) if kv[0] in order else 9, kv[0])))

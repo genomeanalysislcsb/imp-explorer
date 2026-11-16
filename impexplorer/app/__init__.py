@@ -12,7 +12,7 @@ import dash
 from dash import Input, Output, dcc, html
 
 from .data import Data
-from .ui import GLOBAL, Page, control, dd
+from .ui import GLOBAL, QC_MODES, Page, control, dd
 
 
 def nav_id(path):
@@ -55,6 +55,9 @@ def create_app(release, plugins=(), extra_tables=()):
                 control("group by", dd(GLOBAL[0], [{"label": "(none)", "value": ""}] + gcols, default_group or "")),
                 control("filter", dd(GLOBAL[1], [{"label": "(all samples)", "value": ""}] + data.meta_cols, "")),
                 control("values", dd(GLOBAL[2], [], [], multi=True, placeholder="all")),
+                html.Div(control("QC", dd(GLOBAL[3], [{"label": lab, "value": v} for v, lab in QC_MODES], "all")),
+                         title="flagged samples per layer ('imp-explorer qc'): show all, leave out FAIL, or keep "
+                               "PASS only", style=None if data.sample_qc else {"display": "none"}),
             ], className="globals"),
         ], className="topbar"),
         html.Div(id="page", className="main"),

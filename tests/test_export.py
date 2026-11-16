@@ -701,3 +701,55 @@ def test_metadata_template_check_and_dictionary(tmp_path):
     assert C.kinds["smoking"] == "categorical" and C.kinds["age"] == "numeric"
     a2 = parse(["--data", str(out), "--metadata", str(tmp_path / "clean.tsv")])
     assert Cohort(a2).kinds["smoking"] == "numeric"
+
+
+def test_sample_qc(tmp_path):
+    """imp-explorer qc: status per sample and layer (auto, manual), QC switch of the app per layer"""
+    from impexplorer import proteomics, sampleqc
+    root = make_fixture.main(str(tmp_path), n=30)
+    out = tmp_path / "release"
+    export.main(["--imp-root", root, "--metadata", str(tmp_path / "metadata.tsv"), "--out", str(out),
+                 "--threads", "2"])
+    meta = pd.read_csv(tmp_path / "metadata.tsv", sep="\t")
+    make_prot_tables(str(tmp_path / "prot"), meta)
+    assert proteomics.main(["--data", str(out), "--prot", str(tmp_path / "prot"), "--id-case", "upper"]) == 0
+    ids = list(read_table(str(out), "samples")["sample_id"].astype(str))
+    flags = tmp_path / "flags.tsv"
+    pd.DataFrame({"sample_id": [ids[0], ids[1], ids[2], "NOPE"],
+                  "layer": ["mt", "*", "mp_intra", "mg"],
+                  "status": ["fail", "WARN", "PASS", "FAIL"],
+                  "reason": ["low RNA quality (paper)", "outlier in all layers", "", "x"]}).to_csv(
+        flags, sep="\t", index=False)
+    assert sampleqc.main(["--data", str(out), "--flags", str(flags), "--min-mg-pairs", "1"]) == 0
+    t = read_table(str(out), "sample_qc")
+    assert set(t["layer"]) == {"mg", "mt", "mp_extra", "mp_intra"}
+    assert len(t) == 30 * 4 and set(t["status"]) <= {"PASS", "WARN", "FAIL", "missing"}
+    st = t.set_index(["sample_id", "layer"])["status"]
+    assert st[(ids[0], "mt")] == "FAIL" and st[(ids[0], "mg")] == "PASS"
+    assert all(st[(ids[1], ly)] == "WARN" for ly in ("mg", "mt", "mp_intra"))
+    assert (t["status"] == "missing").sum() == 1                  # one sample without the extracellular fraction
+    r = t.set_index(["sample_id", "layer"]).loc[(ids[0], "mt")]
+    assert r["reasons"] == "low RNA quality (paper)" and r["source"].startswith("manual")
+    man = read_manifest(str(out))["sample_qc"]
+    assert man["counts"]["mt"]["FAIL"] == 1
+    try:
+        import dash  # noqa: F401
+    except ImportError:
+        return
+    from impexplorer.app import create_app
+    from impexplorer.app.pages import overview, taxonomy
+    from impexplorer.app.pages._common import selection
+    app = create_app(str(out))
+    d = app._imp_data
+    assert d.qc_drop("mt", "all") == set() and d.qc_drop("mt", "nofail") == {ids[0]}
+    assert d.qc_drop("mt", "pass") == {ids[0], ids[1]} and d.qc_drop("mg", "nofail") == set()
+    s, _, _ = selection(d, "group", None, None, "nofail", "mt")
+    assert len(s) == 29 and ids[0] not in set(s["sample_id"])
+    s, _, _ = selection(d, "group", None, None, "nofail", "mg")
+    assert len(s) == 30
+    ao = taxonomy.across_omics(d, "genus", "Akkermansia", d.samples, "pass")
+    assert len(ao["Kraken2 mt"]) == 28 and len(ao["Kraken2 mg"]) == 29
+    fig, flagged = overview.qc_figure(d, d.samples, d.group_of("group"), {})
+    assert len(fig.data) == 1 and len(flagged) == 5           # S02 in its 4 layers, S01 in mt
+    for p in app._imp_pages:
+        assert p.layout(d) is not None

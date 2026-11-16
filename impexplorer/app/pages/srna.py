@@ -39,10 +39,10 @@ def sets(data, frac):
     return [{"label": SET_LABEL.get(s, s), "value": s} for s in have]
 
 
-def groups(data, group, fcol, fval, frac):
+def groups(data, group, fcol, fval, frac, qcm=None):
     """samples of this sRNA fraction with their group: the global 'group by' if the release has it, else the group
     of the sRNA cohort analysis"""
-    s, g, cmap = selection(data, group, fcol, fval)
+    s, g, cmap = selection(data, group, fcol, fval, qcm, frac)
     ids = set(data.q("SELECT DISTINCT sample_id FROM srna_samples WHERE omic=?", [frac])["sample_id"].astype(str))
     if g.nunique() <= 1:
         sg = data.q("SELECT sample_id, \"group\" FROM srna_samples WHERE omic=?", [frac])
@@ -121,11 +121,11 @@ def register(app, data):
                   Input("sr-frac", "value"), Input("sr-set", "value"), Input("sr-top", "value"),
                   Input("sr-view", "value"), Input("sr-hrows", "value"), Input("sr-hcols", "value"),
                   Input("sr-hval", "value"), Input("sr-hann", "value"),
-                  Input(GLOBAL[0], "value"), Input(GLOBAL[1], "value"), Input(GLOBAL[2], "value"))
-    def _comp(frac, st, top, view, hrows, hcols, hval, hann, group, fcol, fval):
+                  Input(GLOBAL[0], "value"), Input(GLOBAL[1], "value"), Input(GLOBAL[2], "value"), Input(GLOBAL[3], "value"))
+    def _comp(frac, st, top, view, hrows, hcols, hval, hann, group, fcol, fval, qcm=None):
         if not frac or not st:
             return empty_fig(), [], None
-        ids, g, cmap = groups(data, group, fcol, fval, frac)
+        ids, g, cmap = groups(data, group, fcol, fval, frac, qcm)
         M = load(data, frac, st, ids)
         if M.empty:
             return empty_fig(), [], None
@@ -140,21 +140,21 @@ def register(app, data):
         return fig, [{"label": x, "value": x} for x in order], (order[0] if order else None)
 
     @app.callback(Output("sr-qc", "figure"), Input("sr-frac", "value"), Input("sr-metric", "value"),
-                  Input(GLOBAL[0], "value"), Input(GLOBAL[1], "value"), Input(GLOBAL[2], "value"))
-    def _qc(frac, metric, group, fcol, fval):
+                  Input(GLOBAL[0], "value"), Input(GLOBAL[1], "value"), Input(GLOBAL[2], "value"), Input(GLOBAL[3], "value"))
+    def _qc(frac, metric, group, fcol, fval, qcm=None):
         if not frac or not metric:
             return empty_fig()
-        ids, g, cmap = groups(data, group, fcol, fval, frac)
+        ids, g, cmap = groups(data, group, fcol, fval, frac, qcm)
         d = data.q("SELECT sample_id, value FROM srna_qc WHERE omic=? AND metric=?", [frac, metric])
         v = d.set_index("sample_id")["value"].reindex(ids)
         return box_by_group(v, g, cmap, metric, title="%s · %s" % (metric, frac), height=380)
 
     @app.callback(Output("sr-classes", "figure"), Input("sr-frac", "value"),
-                  Input(GLOBAL[0], "value"), Input(GLOBAL[1], "value"), Input(GLOBAL[2], "value"))
-    def _classes(frac, group, fcol, fval):
+                  Input(GLOBAL[0], "value"), Input(GLOBAL[1], "value"), Input(GLOBAL[2], "value"), Input(GLOBAL[3], "value"))
+    def _classes(frac, group, fcol, fval, qcm=None):
         if not frac:
             return empty_fig()
-        ids, g, cmap = groups(data, group, fcol, fval, frac)
+        ids, g, cmap = groups(data, group, fcol, fval, frac, qcm)
         M = load(data, frac, "rna_class", ids)
         if M.empty:
             return empty_fig("no RNA classes for this fraction")
@@ -182,11 +182,11 @@ def register(app, data):
 
     @app.callback(Output("sr-box", "figure"), Output("sr-twin", "figure"), Input("sr-feat", "value"),
                   Input("sr-frac", "value"), Input("sr-set", "value"),
-                  Input(GLOBAL[0], "value"), Input(GLOBAL[1], "value"), Input(GLOBAL[2], "value"))
-    def _feature(feat, frac, st, group, fcol, fval):
+                  Input(GLOBAL[0], "value"), Input(GLOBAL[1], "value"), Input(GLOBAL[2], "value"), Input(GLOBAL[3], "value"))
+    def _feature(feat, frac, st, group, fcol, fval, qcm=None):
         if not feat or not frac or not st:
             return empty_fig("choose a feature"), empty_fig("choose a feature")
-        ids, g, cmap = groups(data, group, fcol, fval, frac)
+        ids, g, cmap = groups(data, group, fcol, fval, frac, qcm)
         d = data.q("SELECT sample_id, rel FROM srna_features WHERE omic=? AND \"set\"=? AND feature=?",
                    [frac, st, feat])
         v = d.set_index("sample_id")["rel"].reindex(ids).fillna(0) * 100

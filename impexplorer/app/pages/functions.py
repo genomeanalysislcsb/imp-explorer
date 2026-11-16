@@ -10,7 +10,7 @@ from ..links import anchor, md, url
 from ..stats import group_tests
 from ..ui import GLOBAL, Page, card, control, dd, empty_fig, graph, style
 from ._common import (HEAT_COLS, HEAT_ROWS, HEAT_VALUES, OMIC_COLOR, box_by_group, clustered_heatmap, grid,
-                      matrix, selection)
+                      matrix, qc_filter, selection)
 
 DB_LABEL = {"kegg_ko": "KEGG orthologs", "kegg_module": "KEGG modules", "kegg_pathway": "KEGG pathways",
             "cazy": "CAZymes", "enzyme_ec": "EC numbers", "pfam": "Pfam domains", "cog": "COGs"}
@@ -79,11 +79,11 @@ def register(app, data):
                   Output("fn-term", "value"), Input("fn-db", "value"), Input("fn-omic", "value"),
                   Input("fn-prev", "value"), Input("fn-hrows", "value"), Input("fn-hcols", "value"),
                   Input("fn-hval", "value"), Input("fn-hann", "value"),
-                  Input(GLOBAL[0], "value"), Input(GLOBAL[1], "value"), Input(GLOBAL[2], "value"))
-    def _main(db, omic, prev, hrows, hcols, hval, hann, group, fcol, fval):
+                  Input(GLOBAL[0], "value"), Input(GLOBAL[1], "value"), Input(GLOBAL[2], "value"), Input(GLOBAL[3], "value"))
+    def _main(db, omic, prev, hrows, hcols, hval, hann, group, fcol, fval, qcm=None):
         if not db or not omic:
             return empty_fig(), None, [], None
-        s, g, cmap = selection(data, group, fcol, fval)
+        s, g, cmap = selection(data, group, fcol, fval, qcm, omic)
         M = load(data, db, omic, s)
         if M.empty:
             return empty_fig(), None, [], None
@@ -118,8 +118,8 @@ def register(app, data):
 
     @app.callback(Output("fn-box", "figure"), Output("fn-ratio", "figure"), Input("fn-term", "value"),
                   Input("fn-db", "value"), Input(GLOBAL[0], "value"), Input(GLOBAL[1], "value"),
-                  Input(GLOBAL[2], "value"))
-    def _term(term, db, group, fcol, fval):
+                  Input(GLOBAL[2], "value"), Input(GLOBAL[3], "value"))
+    def _term(term, db, group, fcol, fval, qcm=None):
         if not term or not db:
             return empty_fig("choose a term"), empty_fig("choose a term")
         s, g, cmap = selection(data, group, fcol, fval)
@@ -139,6 +139,7 @@ def register(app, data):
                 v = p.loc[g.reindex(p.index).values == lv, omic] * 100
                 if have is not None:
                     v = v[v.index.isin(have)]
+                v = qc_filter(data, v, omic, qcm)
                 fig.add_trace(go.Box(y=v.values, x=[lv] * len(v), name=omic, legendgroup=omic, offsetgroup=omic,
                                      showlegend=(lv == gl[0]), boxpoints="all", jitter=0.4, pointpos=0,
                                      marker=dict(size=4, color=cmap.get(lv), opacity=0.7),
@@ -151,6 +152,7 @@ def register(app, data):
         if not {"mg", "mt"} <= set(p.columns):
             return fig, empty_fig("needs mg and mt")
         q = p[p["mg"] > 0]
+        q = q[~q.index.astype(str).isin(data.qc_drop("mg", qcm) | data.qc_drop("mt", qcm))]
         r = np.log2((q["mt"] + 1e-9) / q["mg"])
         return fig, box_by_group(r, g, cmap, "log2(mt / mg)", title=term, height=420)
 

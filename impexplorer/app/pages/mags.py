@@ -46,9 +46,9 @@ def register(app, data):
     @app.callback(Output("mg-qual", "figure"), Output("mg-sun", "figure"), Output("mg-table", "children"),
                   Output("mg-taxon", "options"), Output("mg-taxon", "value"),
                   Input("mg-tier", "value"), Input("mg-rank", "value"),
-                  Input(GLOBAL[0], "value"), Input(GLOBAL[1], "value"), Input(GLOBAL[2], "value"))
-    def _main(tiers, rank, group, fcol, fval):
-        s, g, cmap = selection(data, group, fcol, fval)
+                  Input(GLOBAL[0], "value"), Input(GLOBAL[1], "value"), Input(GLOBAL[2], "value"), Input(GLOBAL[3], "value"))
+    def _main(tiers, rank, group, fcol, fval, qcm=None):
+        s, g, cmap = selection(data, group, fcol, fval, qcm, "mg")
         b = bins_of(data, s, tiers or [])
         if b.empty:
             return empty_fig(), empty_fig(), None, [], None
@@ -95,11 +95,11 @@ def register(app, data):
 
     @app.callback(Output("mg-box", "figure"), Output("mg-ratio", "figure"), Input("mg-taxon", "value"),
                   Input("mg-rank", "value"), Input("mg-tier", "value"),
-                  Input(GLOBAL[0], "value"), Input(GLOBAL[1], "value"), Input(GLOBAL[2], "value"))
-    def _taxon(taxon, rank, tiers, group, fcol, fval):
+                  Input(GLOBAL[0], "value"), Input(GLOBAL[1], "value"), Input(GLOBAL[2], "value"), Input(GLOBAL[3], "value"))
+    def _taxon(taxon, rank, tiers, group, fcol, fval, qcm=None):
         if not taxon:
             return empty_fig("choose a taxon"), empty_fig("choose a taxon")
-        s, g, cmap = selection(data, group, fcol, fval)
+        s, g, cmap = selection(data, group, fcol, fval, qcm, "mg")
         b = bins_of(data, s, tiers or [])
         sel = b[b[rank or "genus"] == taxon]
         if sel.empty or not data.has("bin_abundance"):

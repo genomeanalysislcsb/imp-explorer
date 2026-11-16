@@ -7,11 +7,21 @@ import plotly.graph_objects as go
 from ..ui import colors, empty_fig, style
 
 
-def selection(data, group_col, fcol, fval):
-    """(samples DataFrame, group Series indexed by sample_id, colour map)"""
+def selection(data, group_col, fcol, fval, qcm=None, layer=None):
+    """(samples DataFrame, group Series indexed by sample_id, colour map); with a QC mode and the layer shown, the
+    samples flagged in that layer are left out (see Data.qc_drop)"""
     s = data.subset(fcol, fval)
+    drop = data.qc_drop(layer, qcm)
+    if drop:
+        s = s[~s["sample_id"].astype(str).isin(drop)]
     g = data.group_of(group_col, s)
     return s, g, colors(g.unique())
+
+
+def qc_filter(data, series, layer, qcm):
+    """drop the samples flagged in `layer` (for views with several layers): Series indexed by sample_id"""
+    drop = data.qc_drop(layer, qcm)
+    return series[~series.index.astype(str).isin(drop)] if drop else series
 
 
 def ids_param(samples):

@@ -8,7 +8,9 @@ from dash import dcc, html
 PALETTE = ["#2a6f97", "#d1495b", "#edae49", "#00798c", "#8f5aa8", "#66a182", "#e07a5f", "#3d405b",
            "#81b29a", "#f2cc8f", "#6d597a", "#b56576"]
 OMIC_LABEL = {"mg": "metagenome (mg)", "mt": "metatranscriptome (mt)", "mgmt": "assembly"}
-GLOBAL = ("g-group", "g-fcol", "g-fval")       # ids of the global controls (group by, filter column, values)
+GLOBAL = ("g-group", "g-fcol", "g-fval", "g-qc")   # ids of the global controls (group by, filter column, values,
+                                                 # QC: which flagged samples to leave out)
+QC_MODES = (("all", "all samples"), ("nofail", "without FAIL"), ("pass", "PASS only"))
 
 
 @dataclass

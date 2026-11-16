@@ -43,8 +43,8 @@ def values(data, assay, ids, feats=None):
     return d.pivot_table(index="sample_id", columns="feature_id", values="value", aggfunc="first")
 
 
-def groups(data, group, fcol, fval, assay):
-    s, g, cmap = selection(data, group, fcol, fval)
+def groups(data, group, fcol, fval, assay, qcm=None):
+    s, g, cmap = selection(data, group, fcol, fval, qcm, "metab.%s" % assay)
     have = set(data.q("SELECT DISTINCT sample_id FROM metab_values WHERE assay=?", [assay])["sample_id"].astype(str))
     keep = [x for x in s["sample_id"].astype(str) if x in have]
     return keep, g.reindex(keep).fillna("NA"), cmap, s
@@ -170,11 +170,11 @@ def register(app, data):
                   Output("mb-grid", "rowData"), Output("mb-grid", "columnDefs"),
                   Input("mb-assay", "value"), Input("mb-annot", "value"), Input("mb-top", "value"),
                   Input("mb-hrows", "value"), Input("mb-hcols", "value"), Input("mb-hann", "value"),
-                  Input(GLOBAL[0], "value"), Input(GLOBAL[1], "value"), Input(GLOBAL[2], "value"))
-    def _assay(assay, annot, top, hrows, hcols, hann, group, fcol, fval):
+                  Input(GLOBAL[0], "value"), Input(GLOBAL[1], "value"), Input(GLOBAL[2], "value"), Input(GLOBAL[3], "value"))
+    def _assay(assay, annot, top, hrows, hcols, hann, group, fcol, fval, qcm=None):
         if not assay:
             return empty_fig(), [], None, [], []
-        ids, g, cmap, s = groups(data, group, fcol, fval, assay)
+        ids, g, cmap, s = groups(data, group, fcol, fval, assay, qcm)
         f = features(data, assay, annot)
         M = values(data, assay, ids, f["feature_id"])
         if M.empty:
@@ -205,11 +205,11 @@ def register(app, data):
 
     @app.callback(Output("mb-box", "figure"), Output("mb-cor", "figure"), Input("mb-feat", "value"),
                   Input("mb-assay", "value"), Input("mb-prof", "value"),
-                  Input(GLOBAL[0], "value"), Input(GLOBAL[1], "value"), Input(GLOBAL[2], "value"))
-    def _feature(feat, assay, prof, group, fcol, fval):
+                  Input(GLOBAL[0], "value"), Input(GLOBAL[1], "value"), Input(GLOBAL[2], "value"), Input(GLOBAL[3], "value"))
+    def _feature(feat, assay, prof, group, fcol, fval, qcm=None):
         if not feat or not assay:
             return empty_fig("choose a feature"), empty_fig("choose a feature")
-        ids, g, cmap, _ = groups(data, group, fcol, fval, assay)
+        ids, g, cmap, _ = groups(data, group, fcol, fval, assay, qcm)
         d = data.q("SELECT sample_id, value FROM metab_values WHERE assay=? AND feature_id=?", [assay, feat])
         v = d.set_index("sample_id")["value"].astype(float).reindex(ids).dropna()
         nm = data.q("SELECT name FROM metab_features WHERE assay=? AND feature_id=?", [assay, feat])

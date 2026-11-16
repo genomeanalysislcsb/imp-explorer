@@ -45,6 +45,12 @@ TABLES = {
         "keys": ["sample_id", "omic", "db", "feature"],
         "columns": ["sample_id", "omic", "db", "feature", "reads"],
     },
+    "sample_qc": {
+        "doc": "QC status per sample and layer (mg, mt, srna_<fraction>, mp_<fraction>, metab.<assay>): PASS, WARN, "
+               "FAIL or missing, reasons and source (auto, srna, manual); written by 'imp-explorer qc'",
+        "keys": ["sample_id", "layer"],
+        "columns": ["sample_id", "layer", "status", "reasons", "source"],
+    },
 }
 
 MIMAG = (("high", 90, 5), ("medium", 50, 10))      # (tier, min completeness, max contamination)

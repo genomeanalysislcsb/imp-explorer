@@ -61,8 +61,8 @@ def layout(data):
 
 def register(app, data):
     @app.callback(Output("qc-box", "figure"), Input("qc-metric", "value"), Input("qc-log", "value"),
-                  Input(GLOBAL[0], "value"), Input(GLOBAL[1], "value"), Input(GLOBAL[2], "value"))
-    def _box(key, scale, group, fcol, fval):
+                  Input(GLOBAL[0], "value"), Input(GLOBAL[1], "value"), Input(GLOBAL[2], "value"), Input(GLOBAL[3], "value"))
+    def _box(key, scale, group, fcol, fval, qcm=None):
         if not key:
             return empty_fig()
         s, g, cmap = selection(data, group, fcol, fval)
@@ -70,8 +70,8 @@ def register(app, data):
                             height=420)
 
     @app.callback(Output("qc-xy", "figure"), Input("qc-x", "value"), Input("qc-y", "value"),
-                  Input(GLOBAL[0], "value"), Input(GLOBAL[1], "value"), Input(GLOBAL[2], "value"))
-    def _xy(kx, ky, group, fcol, fval):
+                  Input(GLOBAL[0], "value"), Input(GLOBAL[1], "value"), Input(GLOBAL[2], "value"), Input(GLOBAL[3], "value"))
+    def _xy(kx, ky, group, fcol, fval, qcm=None):
         if not kx or not ky:
             return empty_fig()
         s, g, cmap = selection(data, group, fcol, fval)

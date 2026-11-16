@@ -81,6 +81,12 @@ Written by [`imp-explorer srna`](srna.md) (optional): `srna_samples`, `srna_qc`,
 `srna_permanova`, `srna_dispersion`, `srna_ordination`, `srna_covariates`; settings in the manifest under `srna`.
 The app combines the cohort results of both as views `all_tests`, `all_models`, ... (`UNION ALL BY NAME`).
 
+## sample_qc
+
+Written by [`imp-explorer qc`](sample-qc.md) (optional): one row per sample and layer (`mg`, `mt`,
+`srna_<fraction>`, `mp_<fraction>`, `metab.<assay>`) with `status` (PASS, WARN, FAIL, missing), `reasons` and
+`source` (auto, srna, manual); counts per layer in the manifest under `sample_qc`.
+
 ## manifest.json
 
 ```json

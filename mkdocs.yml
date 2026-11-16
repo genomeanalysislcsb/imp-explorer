@@ -33,6 +33,7 @@ nav:
       - sRNA layer: srna.md
       - Proteomics layer: proteomics.md
       - Metabolomics layer: metabolomics.md
+      - Sample QC per layer: sample-qc.md
   - The app: app.md
   - Reference:
       - Release tables (data model): data-model.md

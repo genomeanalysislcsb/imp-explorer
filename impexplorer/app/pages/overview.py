@@ -143,14 +143,66 @@ def layout(data):
                        "medium quality (≥ 50 %, ≤ 10 %) bins of each sample, MIMAG tiers")],
                  className="grid g2"),
         html.Div(style={"height": "16px"}),
+        qc_card(data),
         card("Samples", html.Div(id="ov-table"), note="metadata and key numbers; sort and filter in the column headers"),
     ])
 
 
+QC_CODE = {"PASS": 0, "WARN": 1, "FAIL": 2, "missing": 3}
+QC_SCALE = [[0, "#66a182"], [0.25, "#66a182"], [0.25, "#edae49"], [0.5, "#edae49"], [0.5, "#d1495b"],
+            [0.75, "#d1495b"], [0.75, "#e4e7eb"], [1, "#e4e7eb"]]
+
+
+def qc_card(data):
+    if not data.sample_qc:
+        return None
+    return html.Div([card("Data and QC per layer", graph("ov-qc"),
+                          note="every sample in every layer: PASS, WARN, FAIL or no data ('imp-explorer qc'); the "
+                               "QC switch at the top leaves FAIL (or FAIL and WARN) out of the plots of that layer"),
+                     card("Flagged samples", html.Div(id="ov-qc-table"))], style={"marginBottom": "16px"})
+
+
+def qc_figure(data, s, g, cmap):
+    t = data.q("SELECT sample_id, layer, status, reasons, source FROM sample_qc")
+    t = t[t["sample_id"].astype(str).isin(s["sample_id"].astype(str))]
+    if t.empty:
+        return go.Figure(), t
+    order = pd.DataFrame({"g": g.reindex(sorted(t["sample_id"].unique())).fillna("NA")})
+    order["bad"] = t.assign(c=t["status"].map(QC_CODE)).groupby("sample_id")["c"].sum().reindex(order.index)
+    xs = list(order.sort_values(["g", "bad"], ascending=[True, False]).index)     # by group, flagged first
+    rank = lambda ly: ({"mg": 0, "mt": 1}.get(ly, 2 if ly.startswith("srna") else 3 if ly.startswith("mp_") else 4), ly)
+    layers = sorted(t["layer"].unique(), key=rank)
+    Z = t.pivot_table(index="layer", columns="sample_id", values="status", aggfunc="first").reindex(
+        index=layers, columns=xs)
+    R = t.pivot_table(index="layer", columns="sample_id", values="reasons", aggfunc="first").reindex(
+        index=layers, columns=xs).fillna("")
+    z = Z.apply(lambda c: c.map(QC_CODE)).values
+    txt = [["%s · %s<br>%s%s" % (sid, ly, Z.at[ly, sid], ("<br>" + R.at[ly, sid]) if R.at[ly, sid] else "")
+            for sid in xs] for ly in layers]
+    fig = go.Figure(go.Heatmap(z=z, x=xs, y=layers, zmin=0, zmax=3, colorscale=QC_SCALE, text=txt,
+                               hovertemplate="%{text}<extra></extra>", xgap=1, ygap=2,
+                               colorbar=dict(tickvals=[0.375, 1.125, 1.875, 2.625],
+                                             ticktext=["PASS", "WARN", "FAIL", "no data"], len=0.9, thickness=12)))
+    gg = g.reindex(xs).fillna("NA")
+    pos = 0
+    for lv, n in gg.groupby(gg, sort=False).size().items():
+        fig.add_annotation(x=pos + n / 2 - 0.5, y=1.0, yanchor="bottom", xref="x", yref="paper",
+                           text="<b>%s</b>" % lv, showarrow=False, font=dict(size=11, color=cmap.get(str(lv), "#1f2933")))
+        if pos:
+            fig.add_vline(x=pos - 0.5, line=dict(color="#1f2933", width=1))
+        pos += n
+    fig.update_xaxes(showticklabels=len(xs) <= 80, tickangle=-90, tickfont=dict(size=8))
+    style(fig, 140 + 22 * len(layers), legend=False)
+    fig.update_layout(margin=dict(l=120, r=20, t=48, b=60 if len(xs) <= 80 else 20))
+    fig.update_yaxes(autorange="reversed")
+    flagged = t[t["status"].isin(("WARN", "FAIL"))].sort_values(["layer", "status", "sample_id"])
+    return fig, flagged
+
+
 def register(app, data):
     @app.callback(Output("ov-groups", "figure"), Output("ov-mags", "figure"), Output("ov-table", "children"),
-                  Input(GLOBAL[0], "value"), Input(GLOBAL[1], "value"), Input(GLOBAL[2], "value"))
-    def _update(group, fcol, fval):
+                  Input(GLOBAL[0], "value"), Input(GLOBAL[1], "value"), Input(GLOBAL[2], "value"), Input(GLOBAL[3], "value"))
+    def _update(group, fcol, fval, qcm=None):
         s, g, cmap = selection(data, group, fcol, fval)
         counts = g.value_counts().sort_index()
         f1 = go.Figure(go.Bar(x=[str(i) for i in counts.index], y=counts.values,
@@ -175,6 +227,22 @@ def register(app, data):
         t = sample_table(data)
         t = t[t["sample_id"].isin(s["sample_id"])]
         return f1, f2, grid("ov-grid", t, height=420)
+
+    register_qc(app, data)
+
+
+def register_qc(app, data):
+    if not data.sample_qc:
+        return
+
+    @app.callback(Output("ov-qc", "figure"), Output("ov-qc-table", "children"),
+                  Input(GLOBAL[0], "value"), Input(GLOBAL[1], "value"), Input(GLOBAL[2], "value"))
+    def _qc(group, fcol, fval):
+        s, g, cmap = selection(data, group, fcol, fval)          # all samples: this view shows the flags
+        fig, flagged = qc_figure(data, s, g, cmap)
+        if flagged.empty:
+            return fig, html.P("no sample flagged WARN or FAIL", className="hint")
+        return fig, grid("ov-qc-grid", flagged, height=min(420, 70 + 42 * len(flagged)), fit=True)
 
 
 PAGE = Page(path="/", name="Overview", order=0, layout=layout, register=register, requires=("samples",))

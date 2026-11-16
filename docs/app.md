@@ -1,11 +1,13 @@
 # The app
 
-The top bar holds three controls that every page follows:
+The top bar holds the controls that every page follows:
 
 - **group by**: any metadata column with 2–12 values (default `group` if present). Colours, box plots, group tests
   and PERMANOVA use it.
 - **filter** / **values**: keep only samples with the chosen values of one column, e.g. `site = site_1` to compare
   groups within one site.
+- **QC** (when the release has a [`sample_qc`](sample-qc.md) table): all samples, without FAIL, or PASS only; the
+  flagged samples of a layer are left out of that layer's plots.
 
 Tables can be sorted and filtered in their column headers; clicking a row of a group-test table plots that feature.
 Plots can be zoomed, and saved as SVG with the camera icon. Feature ids link to their reference page (KEGG, CAZy,
@@ -19,6 +21,9 @@ Samples per group, MAGs per sample (MIMAG tiers) and a table of all samples with
 With [sRNA results](srna.md) imported, a second row of numbers shows the sRNA samples (and how many are in the
 release), the libraries per fraction, human miRNAs and genera detected, and the sRNA features with q below the
 threshold in a group comparison; the sample table gets one column per sRNA fraction.
+
+With [sample QC](sample-qc.md), *Data and QC per layer* shows every sample in every layer coloured by status, and
+the flagged samples with their reasons.
 
 ![Overview](img/overview.png)
 

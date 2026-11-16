@@ -30,8 +30,8 @@ def fractions(data):
     return [{"label": omic_label(data, o), "value": o} for o in os_]
 
 
-def groups(data, group, fcol, fval, omic):
-    s, g, cmap = selection(data, group, fcol, fval)
+def groups(data, group, fcol, fval, omic, qcm=None):
+    s, g, cmap = selection(data, group, fcol, fval, qcm, omic)
     have = set(data.q("SELECT sample_id FROM prot_samples WHERE omic=?", [omic])["sample_id"].astype(str))
     keep = [x for x in s["sample_id"].astype(str) if x in have]
     return keep, g.reindex(keep).fillna("NA"), cmap
@@ -146,11 +146,11 @@ def layout(data):
 
 def register(app, data):
     @app.callback(Output("pr-qc", "figure"), Input("pr-frac", "value"), Input("pr-metric", "value"),
-                  Input(GLOBAL[0], "value"), Input(GLOBAL[1], "value"), Input(GLOBAL[2], "value"))
-    def _qc(omic, metric, group, fcol, fval):
+                  Input(GLOBAL[0], "value"), Input(GLOBAL[1], "value"), Input(GLOBAL[2], "value"), Input(GLOBAL[3], "value"))
+    def _qc(omic, metric, group, fcol, fval, qcm=None):
         if not omic or not metric:
             return empty_fig()
-        ids, g, cmap = groups(data, group, fcol, fval, omic)
+        ids, g, cmap = groups(data, group, fcol, fval, omic, qcm)
         d = data.q("SELECT * FROM prot_samples WHERE omic=?", [omic])
         if metric not in d.columns:
             return empty_fig("%s not in the import" % metric)
@@ -174,11 +174,11 @@ def register(app, data):
     @app.callback(Output("pr-who", "figure"), Output("pr-grid", "rowData"), Output("pr-grid", "columnDefs"),
                   Output("pr-link", "children"), Input("pr-term", "value"), Input("pr-db", "value"),
                   Input("pr-frac", "value"), Input(GLOBAL[0], "value"), Input(GLOBAL[1], "value"),
-                  Input(GLOBAL[2], "value"))
-    def _who(term, db, omic, group, fcol, fval):
+                  Input(GLOBAL[2], "value"), Input(GLOBAL[3], "value"))
+    def _who(term, db, omic, group, fcol, fval, qcm=None):
         if not term or not db or not omic:
             return empty_fig("choose a term"), [], [], ""
-        ids, g, cmap = groups(data, group, fcol, fval, omic)
+        ids, g, cmap = groups(data, group, fcol, fval, omic, qcm)
         M = term_genera(data, omic, db, term, ids)
         fig = group_bars(M, g, 10, "%s · %s" % (term, omic), "% of the term's protein abundance")
         t = data.q("SELECT p.protein_id, p.taxon, p.rank, p.product, p.%s AS terms, count(DISTINCT a.sample_id) AS "
@@ -190,11 +190,11 @@ def register(app, data):
 
     @app.callback(Output("pr-what", "figure"), Input("pr-genus", "value"), Input("pr-db", "value"),
                   Input("pr-frac", "value"), Input(GLOBAL[0], "value"), Input(GLOBAL[1], "value"),
-                  Input(GLOBAL[2], "value"))
-    def _what(genus, db, omic, group, fcol, fval):
+                  Input(GLOBAL[2], "value"), Input(GLOBAL[3], "value"))
+    def _what(genus, db, omic, group, fcol, fval, qcm=None):
         if not genus or not db or not omic:
             return empty_fig("choose a genus")
-        ids, g, cmap = groups(data, group, fcol, fval, omic)
+        ids, g, cmap = groups(data, group, fcol, fval, omic, qcm)
         M = genus_terms(data, omic, db, genus, ids)
         return term_bars(M, g, cmap, 15, "%s · %s" % (genus, omic), "% of the genus's annotated protein abundance")
 

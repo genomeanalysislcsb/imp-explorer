@@ -5,7 +5,7 @@ import plotly.graph_objects as go
 from dash import Input, Output, html, dcc
 
 from ..ui import GLOBAL, Page, card, empty_fig, graph, style
-from ._common import grid, selection
+from ._common import grid, qc_filter, selection
 
 SOURCE = {"kraken2_bracken": "Kraken2", "motus": "mOTUs"}
 COLS = ["layer", "kind", "name", "link", "samples", "mean_pct"]
@@ -101,6 +101,16 @@ def series_for(data, layer, kind, name, samples, fid=None):
     return out
 
 
+def series_layer(data, label):
+    """QC layer of a series label ('Kraken2/Bracken mg', 'kegg_ko mt', 'sRNA srna_int', a metabolomics assay)"""
+    last = str(label).split(" ")[-1]
+    srna = {lab: o for o, lab in data.manifest.get("srna", {}).get("fractions", {}).items()}
+    for cand in (last, "metab.%s" % label, srna.get(label)):
+        if cand in data.sample_qc:
+            return cand
+    return None
+
+
 def metab_series(data, assay, fid, ids):
     d = data.q("SELECT sample_id, value FROM metab_values WHERE assay = ? AND feature_id = ?", [assay, fid])
     v = d.set_index("sample_id")["value"].astype(float)
@@ -150,13 +160,14 @@ def register(app, data):
         return d.to_dict("records"), "%d hits%s" % (len(d), " (first 200)" if len(d) >= 200 else "")
 
     @app.callback(Output("se-fig", "figure"), Input("se-grid", "selectedRows"),
-                  Input(GLOBAL[0], "value"), Input(GLOBAL[1], "value"), Input(GLOBAL[2], "value"))
-    def _show(rows, group, fcol, fval):
+                  Input(GLOBAL[0], "value"), Input(GLOBAL[1], "value"), Input(GLOBAL[2], "value"), Input(GLOBAL[3], "value"))
+    def _show(rows, group, fcol, fval, qcm=None):
         if not rows:
             return empty_fig("pick a hit")
         r = rows[0]
         s, g, cmap = selection(data, group, fcol, fval)
         ser = series_for(data, r["layer"], r["kind"], r["name"], s, r.get("fid"))
+        ser = {lab: qc_filter(data, v, series_layer(data, lab), qcm) for lab, v in ser.items()}
         if not ser:
             return empty_fig()
         fig = go.Figure()
