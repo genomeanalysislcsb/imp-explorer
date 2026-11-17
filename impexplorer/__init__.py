@@ -1,2 +1,2 @@
 """IMP explorer: interactive exploration of IMP3 (and optional sRNA-IMP) results."""
-__version__ = "0.3.0"
+__version__ = "0.4.0"

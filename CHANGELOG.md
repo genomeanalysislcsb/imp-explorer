@@ -1,46 +1,57 @@
 # Changelog
 
-## Unreleased
+## 0.4.0 (2026-11)
 
-- **Intracellular vs extracellular** (`cohort --fraction-pairs auto|pairs`, tables `cohort_fraction_diff` /
-  `_summary`, page *Intra vs extra*): per feature a paired Wilcoxon on CLR, matched-pairs rank-biserial r and median
-  log2 ratio, BH-FDR per pair.
-- **Contig taxonomy filter** (`cohort --contig-min-share`, default 1e-5): rare taxa of single short contigs left out
-  of the `contig.*` layers.
-- **QC flags for a whole layer**: `sample_id` `*` in the flags file. `--concordance auto` leaves out the
-  extracellular metatranscriptome.
-- **App**: every layer name on the Concordance heatmaps; top features ranked within each layer (percentile)
-  instead of by CLR; legends and axes of the Sparsity, Same feature and Within plots readable; dropdowns with long
-  names no longer overlap.
-- **Contig taxonomy** (`--contig-taxonomy PATTERN` for `export` and `fraction`): the MMseqs2 `easy-taxonomy` LCA
-  table of each sample's contigs against GTDB (`<prefix>_lca.tsv`), weighted by the reads on the contigs
-  (`Stats/<omic>/*.assembly.contig_read_count.txt`), as taxonomy source `mmseqs2_gtdb`; cohort layers
-  `contig.<rank>.<omic>` (e.g. `contig.genus.mg_ext`, in the auto concordance set). Names in GTDB spelling
-  (`Blautia_A`), so they match the Kraken2 GTDB profiles.
+The analyses of a multi-omics cohort paper (Expobiome, cross-sectional part) in the explorer: QC flags per sample and
+layer, extracellular fractions, a paper's linear models, agreement between the layers and intracellular vs
+extracellular differences, each with its page in the app.
+
+Data
+
+- **Sample QC per layer** (`imp-explorer qc`, table `sample_qc`): every sample keeps its place in the release and
+  gets a status (PASS, WARN, FAIL, missing) in each layer, from automatic rules, the sRNA-IMP verdicts and a manual
+  flags file (e.g. a paper's exclusions with their reasons; `sample_id` `*` = every sample of a layer; tabs or
+  spaces). The app has a QC switch in the top bar (all samples / without FAIL / PASS only) that every page applies
+  per layer, and the Overview shows the sample x layer grid and the flagged samples.
+- **Fractions** (`imp-explorer fraction`): a second fraction of the same samples (e.g. extracellular) as omics of its
+  own: its IMP3 run (`mg_ext`: taxa, MAGs, functions, QC) and its reads remapped to the main assembly
+  (`mt_ext_remap`: functions); QC layers and default cohort layers include them.
 - **Kraken2 database reruns** (`--kraken-db <db>` for `export` and `fraction`): read the Bracken profiles of a rerun
   (`Analysis/taxonomy/bracken_<db>/<omic>/<omic>.combined.<rank>.bracken`, domain from `R1`) instead of IMP3's own,
   so all fractions use the same database; only that database is read (no mixing). `fraction` takes the release's
   database by default and also reads the rerun of a fraction without an IMP3 run (`--remap-only`, e.g. the single-end
   extracellular mt -> `mt_ext`). The manifest records the database (`sources.kraken_db`, per fraction) and which
-  tables a fraction has, and the cohort adds only those layers; `kraken.genus.mt_ext` joins the auto concordance set.
-- **Sample QC per layer** (`imp-explorer qc`, table `sample_qc`): every sample keeps its place in the release and
-  gets a status (PASS, WARN, FAIL, missing) in each layer, from automatic rules, the sRNA-IMP verdicts and a manual
-  flags file (e.g. a paper's exclusions with their reasons). The app has a QC switch in the top bar (all samples /
-  without FAIL / PASS only) that every page applies per layer, and the Overview shows the sample x layer grid and
-  the flagged samples.
-- **Paper analysis** (`imp-explorer cohort --paper-model`): one multivariable linear model per layer as in a paper's
-  Methods, next to the default analysis: type II ANOVA per term for Shannon, Pielou and every feature, variance
-  explained per term, PERMANOVA with all terms (marginal R², Bray–Curtis or Euclidean on CLR), the layer's flagged
-  samples left out (`sample_qc`). Tables `cohort_paper_anova`, `cohort_paper_permanova`, `cohort_paper_variance`.
-- **Fractions** (`imp-explorer fraction`): a second fraction of the same samples (e.g. extracellular) as omics of its
-  own: its IMP3 run (`mg_ext`: taxa, MAGs, functions, QC) and its reads remapped to the main assembly
-  (`mt_ext_remap`: functions); QC layers, default cohort layers and concordance sets include them.
-- **Agreement between layers** (`imp-explorer cohort --concordance`): overlap and sparsity of the features, top
-  features by median CLR, Spearman of Shannon diversity, Mantel tests and per-feature Spearman between every two
-  layers of a set (e.g. genera in mg, mt, proteins and sRNA; Pfam in mg, mt and proteins), and within each sample
-  (profiles of the same sample vs other samples: individuality); Concordance page.
-- **Variance page** (app): variance explained per layer and term (beta diversity, Shannon, features), terms ranked
-  across layers, unexplained variance per layer, significant features per term.
+  tables a fraction has, and the cohort adds only those layers.
+- **Contig taxonomy** (`--contig-taxonomy PATTERN` for `export` and `fraction`): the MMseqs2 `easy-taxonomy` LCA
+  table of each sample's contigs against GTDB (`<prefix>_lca.tsv`), weighted by the reads on the contigs
+  (`Stats/<omic>/*.assembly.contig_read_count.txt`), as taxonomy source `mmseqs2_gtdb`; cohort layers
+  `contig.<rank>.<omic>`. Names in GTDB spelling (`Blautia_A`), so they match the Kraken2 GTDB profiles; the log
+  reports per sample how many contigs matched the read counts.
+
+Analyses (`imp-explorer cohort`)
+
+- **Paper analysis** (`--paper-model`): one multivariable linear model per layer as in a paper's Methods, next to
+  the default analysis: type II ANOVA per term for Shannon, Pielou and every feature, variance explained per term,
+  PERMANOVA with all terms (marginal R², Bray–Curtis or Euclidean on CLR), the layer's flagged samples left out
+  (`sample_qc`). Tables `cohort_paper_anova`, `cohort_paper_permanova`, `cohort_paper_variance`.
+- **Agreement between layers** (`--concordance`): overlap and sparsity of the features, top features, Spearman of
+  Shannon diversity, Mantel tests and per-feature Spearman between every two layers of a set (e.g. genera in mg, mt,
+  mg_ext, contigs, proteins and sRNA; Pfam in mg, mt, mg_ext and proteins; `auto` leaves out the extracellular
+  metatranscriptome), and within each sample (profiles of the same sample vs other samples: individuality).
+- **Intracellular vs extracellular** (`--fraction-pairs auto|pairs`, tables `cohort_fraction_diff` /
+  `cohort_fraction_summary`): per feature a paired Wilcoxon on CLR, matched-pairs rank-biserial r and median log2
+  ratio, BH-FDR per pair.
+- **Contig taxonomy filter** (`--contig-min-share`, default 1e-5): rare taxa of single short contigs left out of the
+  `contig.*` layers.
+
+App
+
+- **Variance page**: variance explained per layer and term (beta diversity, Shannon, features), terms ranked across
+  layers, unexplained variance per layer, significant features per term.
+- **Concordance page**: UpSet of the layers, top features (percentile within each layer), sparsity, Shannon and
+  Mantel heatmaps, same feature in two layers, within each sample, features of one pair.
+- **Intra vs extra page**: features enriched per fraction, volcano, strongest differences, table.
+- Dropdowns with long names no longer overlap.
 
 ## 0.3.0 (2026-11)
 
