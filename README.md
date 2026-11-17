@@ -47,6 +47,8 @@ imp-explorer srna --data /path/to/release_v0.1 --srna-cohort /path/to/srna_outdi
 imp-explorer proteomics --data /path/to/release_v0.1 --prot /path/to/proteomics_export
 # optional: metabolomics (generic assay / feature / value tables) as an extra layer
 imp-explorer metabolomics --data /path/to/release_v0.1 --metab /path/to/metabolomics_export
+# optional: a second fraction of the samples (e.g. extracellular IMP3 runs, reads remapped to the main assembly)
+imp-explorer fraction --data /path/to/release_v0.1 --imp-root /path/to/imp_ext_mg --suffix ext
 # optional: QC status of every sample per layer (manual flags, e.g. a paper's exclusions); QC switch in the app
 imp-explorer qc --data /path/to/release_v0.1 --flags /path/to/sample_flags.tsv
 

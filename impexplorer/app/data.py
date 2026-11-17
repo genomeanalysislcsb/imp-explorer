@@ -64,7 +64,8 @@ class Data:
         self.samples = self.q("SELECT * FROM samples") if "samples" in self.tables else pd.DataFrame(
             columns=["sample_id"])
         self.samples["sample_id"] = self.samples["sample_id"].astype(str)
-        self.meta_cols = [c for c in self.samples.columns if c not in HIDDEN_COLS | {"sample_id", "has_mg", "has_mt"}]
+        self.meta_cols = [c for c in self.samples.columns if c not in HIDDEN_COLS | {"sample_id", "has_mg", "has_mt"}
+                          and not str(c).startswith("has_")]
         # columns usable for grouping: few distinct values
         self.group_cols = [c for c in self.meta_cols if 1 < self.samples[c].nunique(dropna=True) <= 12]
         # QC status per sample and layer ('imp-explorer qc'); {layer: {sample_id: (status, reasons)}}

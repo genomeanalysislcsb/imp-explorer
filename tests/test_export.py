@@ -880,3 +880,53 @@ def test_concordance(tmp_path):
     assert len(cp.pair_matrix(d, "cohort_concord_mantel", "r", "genus", keys).data) == 1
     assert len(cp.sparsity(d, "genus", keys).data) == 2 and len(cp.feature_summary(d, "genus", keys).data) == 2
     assert cp.layout(d) is not None
+
+
+def test_fraction(tmp_path):
+    """imp-explorer fraction: extracellular IMP3 runs (mg_ext) and reads remapped to the main assembly
+    (mt_ext_remap) next to the main release; QC layers and cohort layers of the new omics"""
+    import shutil
+    from impexplorer import cohort, fraction, sampleqc
+    root = make_fixture.main(str(tmp_path), n=24)
+    rel = tmp_path / "release"
+    export.main(["--imp-root", root, "--metadata", str(tmp_path / "metadata.tsv"), "--out", str(rel), "--threads", "2"])
+    ext_mg, ext_mt = tmp_path / "imp_ext_mg", tmp_path / "imp_ext_mt"
+    ids = sorted(read_table(str(rel), "samples")["sample_id"].astype(str))
+    for i, sid in enumerate(ids[:20]):
+        src = os.path.join(root, sorted(os.listdir(root))[i])
+        shutil.copytree(src, ext_mg / sid)                                   # an IMP3 run of the fraction
+        ann = ext_mt / sid / "remapping" / "annotation"                      # remapped reads only
+        os.makedirs(ann)
+        for f in os.listdir(os.path.join(src, "Analysis", "annotation")):
+            if f.startswith("mt.mantis.") and ".counts.tsv" in f:
+                shutil.copy(os.path.join(src, "Analysis", "annotation", f), ann / f)
+    os.makedirs(ext_mg / "contigs")                                          # not a sample folder
+    assert fraction.main(["--data", str(rel), "--imp-root", str(ext_mg), "--threads", "2"]) == 0
+    assert fraction.main(["--data", str(rel), "--imp-root", str(ext_mt), "--remap-only", "--threads", "2"]) == 0
+    assert fraction.main(["--data", str(rel), "--imp-root", str(ext_mg), "--threads", "2"]) == 0   # again: replaced
+    tax = read_table(str(rel), "taxonomy")
+    assert {"mg", "mt", "mg_ext", "mt_ext"} <= set(tax["omic"])
+    fun = read_table(str(rel), "functions")
+    assert {"mg", "mt", "mg_ext", "mt_ext", "mt_ext_remap"} <= set(fun["omic"])
+    assert fun[fun["omic"] == "mt_ext_remap"]["sample_id"].nunique() == 20
+    a = fun[(fun["omic"] == "mt_ext_remap") & (fun["sample_id"] == ids[0])].set_index(["db", "feature"])["reads"]
+    b = fun[(fun["omic"] == "mt") & (fun["sample_id"] == ids[0])].set_index(["db", "feature"])["reads"]
+    assert (a == b.reindex(a.index)).all()
+    bins = read_table(str(rel), "bins")
+    assert bins["bin_id"].is_unique and bins["bin_id"].str.contains(":ext:").sum() > 0
+    s = read_table(str(rel), "samples")
+    assert s["has_mg_ext"].sum() == 20 and s["has_mt_ext_remap"].sum() == 20 and len(s) == 24
+    m = read_manifest(str(rel))["fractions"]
+    assert m["mg_ext"]["label"] == "extracellular metagenome" and m["mt_ext_remap"]["samples"] == 20
+    assert sampleqc.main(["--data", str(rel)]) == 0
+    q = read_table(str(rel), "sample_qc")
+    assert {"mg_ext", "mt_ext", "mt_ext_remap"} <= set(q["layer"])
+    assert (q[q["layer"] == "mg_ext"]["status"] == "missing").sum() == 4
+    rc = cohort.main(["--data", str(rel), "--permutations", "19", "--no-report", "--paper-model", "group+depth"])
+    assert rc == 0
+    st = read_manifest(str(rel))["cohort"]["layers"]
+    assert st["kraken.genus.mg_ext"]["label"] == "Kraken2/Bracken genus, extracellular metagenome"
+    assert "kegg_ko.mt_ext_remap" in st and "kraken.genus.mt_ext_remap" not in st
+    assert "has_mg_ext" not in read_manifest(str(rel))["cohort"]["covariates"]
+    pv = read_table(str(rel), "cohort_paper_variance")
+    assert "kraken.genus.mg_ext" in set(pv["layer"])

@@ -94,7 +94,7 @@ class Cohort:
         self.ref = a.reference if a.reference in self.groups else (self.groups[0] if self.groups else "")
         # metadata columns and kinds
         hidden = {"imp_dir", "has_mg", "has_mt"}
-        self.meta_cols = [c for c in self.samples.columns if c not in hidden]
+        self.meta_cols = [c for c in self.samples.columns if c not in hidden and not str(c).startswith("has_")]
         self.kinds = {c: column_kind([self._s(v) for v in self.samples[c]]) for c in self.meta_cols}
         for c, k in dict_kinds.items():          # the dictionary decides numeric / categorical; text / dates are no
             if c in self.kinds and self.kinds[c] != "empty":   # covariates
@@ -281,6 +281,15 @@ class Cohort:
         return not pd.isna(mt) and mt * 1e6 >= self.a.min_mt_pairs
 
     # ------------------------------------------------------------------ layers
+    def omic_label(self, o):
+        """metagenome / metatranscriptome, or the label of a fraction added with 'imp-explorer fraction'"""
+        if o in OMIC:
+            return OMIC[o]
+        lab = self.manifest.get("fractions", {}).get(o, {}).get("label")
+        if lab:
+            return lab
+        raise KeyError("omic %s not in the release" % o)
+
     def load_layers(self, keys):
         tax = fun = ba = bins = None
         keys = self.expand_metab(keys)
@@ -299,7 +308,7 @@ class Cohort:
                     if src == "motus" and parts[1] == "species" and d.empty:
                         d = self._old_motus(tax, parts[2])
                     M = d.pivot_table(index="sample_id", columns="taxon", values="reads", aggfunc="sum", fill_value=0)
-                    lab = "%s %s, %s" % (LAYER_LABEL[parts[0]], parts[1], OMIC[parts[2]])
+                    lab = "%s %s, %s" % (LAYER_LABEL[parts[0]], parts[1], self.omic_label(parts[2]))
                     self._add(key, lab, parts[2], M)
                 elif parts[0] == "mag":
                     if ba is None:
@@ -310,7 +319,7 @@ class Cohort:
                     d = ba[ba["omic"] == parts[2]].merge(b, on="bin_id")
                     M = d.pivot_table(index="sample_id", columns=rank, values="reads", aggfunc="sum", fill_value=0)
                     M = M.drop(columns=[c for c in M.columns if c == "unclassified"])
-                    self._add(key, "MAG reads per GTDB %s, %s" % (rank, OMIC[parts[2]]), parts[2], M)
+                    self._add(key, "MAG reads per GTDB %s, %s" % (rank, self.omic_label(parts[2])), parts[2], M)
                 elif parts[0] == "ratio":
                     continue                      # after the count layers
                 else:
@@ -323,7 +332,7 @@ class Cohort:
                     M = d.pivot_table(index="sample_id", columns="feature", values="reads", aggfunc="sum", fill_value=0)
                     if db == "kegg_pathway":          # Mantis reports pathways as koNNNNN and mapNNNNN: keep ko
                         M = M.drop(columns=[c for c in M.columns if c.startswith("map") and "ko" + c[3:] in M.columns])
-                    self._add(key, "%s, %s" % (LAYER_LABEL.get(db, db), OMIC[omic]), omic, M, db=db)
+                    self._add(key, "%s, %s" % (LAYER_LABEL.get(db, db), self.omic_label(omic)), omic, M, db=db)
             except (KeyError, IndexError) as e:
                 self.note("layer %s skipped (%s)" % (key, e))
         for key in [k.strip() for k in keys.split(",") if k.strip().startswith("ratio.")]:

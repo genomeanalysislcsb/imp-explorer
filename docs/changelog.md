@@ -11,6 +11,9 @@
   Methods, next to the default analysis: type II ANOVA per term for Shannon, Pielou and every feature, variance
   explained per term, PERMANOVA with all terms (marginal R², Bray–Curtis or Euclidean on CLR), the layer's flagged
   samples left out (`sample_qc`). Tables `cohort_paper_anova`, `cohort_paper_permanova`, `cohort_paper_variance`.
+- **Fractions** (`imp-explorer fraction`): a second fraction of the same samples (e.g. extracellular) as omics of its
+  own: its IMP3 run (`mg_ext`: taxa, MAGs, functions, QC) and its reads remapped to the main assembly
+  (`mt_ext_remap`: functions); QC layers, default cohort layers and concordance sets include them.
 - **Agreement between layers** (`imp-explorer cohort --concordance`): overlap and sparsity of the features, top
   features by median CLR, Spearman of Shannon diversity, Mantel tests and per-feature Spearman between every two
   layers of a set (e.g. genera in mg, mt, proteins and sRNA; Pfam in mg, mt and proteins); Concordance page.

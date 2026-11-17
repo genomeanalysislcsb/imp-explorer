@@ -5,7 +5,8 @@ import sys
 def main(argv=None):
     argv = list(sys.argv[1:] if argv is None else argv)
     if not argv or argv[0] in ("-h", "--help"):
-        print("usage: imp-explorer {export,cohort,metadata,srna,proteomics,metabolomics,qc,run} ...\n  export  IMP3 outputs -> release tables\n"
+        print("usage: imp-explorer {export,fraction,cohort,metadata,srna,proteomics,metabolomics,qc,run} ...\n  export  IMP3 outputs -> release tables\n"
+              "  fraction  add a second fraction of the samples (e.g. extracellular IMP3 runs, remapped reads)\n"
               "  cohort  cohort analysis of a release (tables, PDF/HTML report, app page)\n"
               "  metadata  template (dictionary) for the sample metadata, and checks of a metadata table\n"
               "  srna    add the results of an sRNA-IMP cohort analysis to a release (optional layer)\n"
@@ -23,6 +24,8 @@ def main(argv=None):
         from .proteomics import main as m
     elif cmd == "metabolomics":
         from .metabolomics import main as m
+    elif cmd == "fraction":
+        from .fraction import main as m
     elif cmd == "qc":
         from .sampleqc import main as m
     elif cmd == "metadata":

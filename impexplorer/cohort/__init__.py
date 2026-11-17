@@ -85,6 +85,16 @@ def main(argv=None):
     fdbs = read_manifest(a.data).get("sources", {}).get("function_dbs") or []
     if default:                               # Pfam / COG of mg and mt, when exported (--function-dbs)
         a.layers += "".join(",%s.mg,%s.mt" % (d, d) for d in ("pfam", "cog") if d in fdbs)
+    fr = read_manifest(a.data).get("fractions", {})
+    if default and fr:                        # fractions added with 'imp-explorer fraction'
+        for o in fr:
+            if o.endswith("_remap"):          # reads on the main assembly: functions only
+                a.layers += "".join(",%s.%s" % (d, o) for d in ("kegg_module", "kegg_pathway", "cazy", "kegg_ko") +
+                                    tuple(x for x in ("pfam", "cog") if x in fdbs))
+            else:
+                a.layers += "".join(",%s.%s" % (k, o) for k in
+                                    ("kraken.genus", "kraken.species", "mag.genus", "kegg_module", "kegg_pathway",
+                                     "cazy", "kegg_ko") + tuple(x for x in ("pfam", "cog") if x in fdbs))
     if default and table_path(a.data, "prot_samples"):
         a.layers += ",prot"                   # metaproteomics: genus and KEGG layers of every fraction
     if a.concordance:                         # the layers the concordance sets need

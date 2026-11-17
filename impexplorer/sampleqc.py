@@ -1,7 +1,8 @@
 """imp-explorer qc: QC status of every sample in every layer of a release (table sample_qc).
 
 One row per sample and layer: status PASS, WARN, FAIL or missing, the reasons and where the flag comes from. Layers are
-the omics of the release: mg, mt (IMP3), the sRNA-IMP fractions (e.g. srna_int, srna_ext), the protein fractions
+the omics of the release: mg, mt (IMP3), fractions added with 'imp-explorer fraction' (mg_ext, mt_ext_remap, ...),
+the sRNA-IMP fractions (e.g. srna_int, srna_ext), the protein fractions
 (mp_<fraction>) and the metabolomics assays (metab.<assay>). Sources, in this order:
 
   auto     rules on the release itself: no data in a layer -> missing; mg / mt read pairs after trimming below
@@ -51,6 +52,9 @@ def layer_samples(release):
             have = set(qc.loc[qc["omic"] == o, "sample_id"].astype(str))
         if have or col in smp.columns:
             out[o] = have
+    for col in [c for c in smp.columns if str(c).startswith("has_") and c not in ("has_mg", "has_mt")]:
+        o = str(col)[4:]                          # fractions added with 'imp-explorer fraction' (mg_ext, ...)
+        out[o] = set(smp.loc[smp[col].astype(str).str.lower().isin(("true", "1", "yes")), "sample_id"])
     if _have(release, "srna_samples"):
         s = read_table(release, "srna_samples")
         for o, x in s.groupby("omic"):

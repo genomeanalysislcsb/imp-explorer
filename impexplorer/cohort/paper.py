@@ -52,7 +52,7 @@ def qc_layer(L):
     """layer name of the sample_qc table for a cohort layer"""
     if L.kind == "metab":
         return L.key
-    return L.omic if (L.omic in ("mg", "mt") or str(L.omic).startswith("mp_")) else None
+    return L.omic if L.omic not in (None, "mt/mg") else None
 
 
 def qc_drop(release, mode):
