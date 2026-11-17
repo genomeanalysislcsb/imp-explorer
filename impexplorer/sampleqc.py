@@ -73,8 +73,22 @@ def layer_samples(release):
 
 
 def read_flags(path):
-    sep = "," if path.endswith(".csv") else "\t"
-    f = pd.read_csv(path, sep=sep, dtype=str, comment="#").fillna("")
+    """TSV / CSV; lines without a tab (tabs turned into spaces when pasted into a terminal) are split at runs of
+    white space into sample_id, layer, status and the rest as reason; blank lines are skipped"""
+    if path.endswith(".csv"):
+        f = pd.read_csv(path, dtype=str, comment="#").fillna("")
+    else:
+        rows = []
+        for ln in open(path, encoding="utf-8", errors="replace"):
+            ln = ln.rstrip("\r\n")
+            if not ln.strip() or ln.lstrip().startswith("#"):
+                continue
+            x = ln.split("\t") if "\t" in ln else ln.split(None, 3)
+            rows.append((x + [""] * 4)[:4] if len(x) <= 4 else x[:3] + [" ".join(x[3:])])
+        if not rows:
+            sys.exit("qc: %s is empty" % path)
+        f = pd.DataFrame(rows[1:], columns=[str(c) for c in rows[0]]).fillna("")
+        f = f.loc[:, [c for c in f.columns if c]]
     f.columns = [c.strip().lower() for c in f.columns]
     miss = [c for c in ("sample_id", "layer", "status") if c not in f.columns]
     if miss:
@@ -84,9 +98,10 @@ def read_flags(path):
     f["status"] = [x.upper() if x.upper() in ("PASS", "WARN", "FAIL") else x.lower() for x in f["status"].str.strip()]
     for c in ("sample_id", "layer", "reason"):
         f[c] = f[c].str.strip()
-    bad = sorted(set(f["status"]) - set(LEVELS))
-    if bad:
-        sys.exit("qc: unknown status %s in %s (use %s)" % (bad, path, " / ".join(LEVELS)))
+    bad = f[~f["status"].isin(LEVELS)]
+    if len(bad):
+        sys.exit("qc: unknown status in %s (use %s), lines:\n%s" % (path, " / ".join(LEVELS), "\n".join(
+            "  %s | %s | %r" % (r["sample_id"], r["layer"], r["status"]) for _, r in bad.head(10).iterrows())))
     return f
 
 

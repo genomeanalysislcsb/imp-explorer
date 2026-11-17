@@ -1076,3 +1076,14 @@ def test_contig_taxonomy(tmp_path):
     st = read_manifest(str(rel))["cohort"]
     assert st["layers"]["contig.genus.mg_ext"]["features"] <= 2 and st["contig_min_share"] == 0.3
     assert any("contig.genus.mg_ext:" in n and "taxa kept" in n for n in st["notes"])
+
+
+def test_flags_spaces(tmp_path):
+    """flags pasted into a terminal (tabs became spaces), blank lines, reasons with spaces"""
+    from impexplorer.sampleqc import read_flags
+    p = tmp_path / "f.tsv"
+    p.write_text("sample_id\tlayer\tstatus\treason\nKPL16\tmetab.bile_acids\tFAIL\tmeasured twice\n\n"
+                 "*   mt_ext   FAIL   extracellular mt: single-end, too shallow\n")
+    f = read_flags(str(p))
+    assert list(f["status"]) == ["FAIL", "FAIL"] and f["reason"].iloc[1].startswith("extracellular mt: single")
+    assert f["sample_id"].iloc[1] == "*" and f["layer"].iloc[1] == "mt_ext"
