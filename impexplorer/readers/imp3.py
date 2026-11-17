@@ -428,10 +428,13 @@ def contig_taxonomy_rows(pattern, base, sample, folder=None):
 
 def read_sample(base, sample, function_dbs=DEFAULT_FUNCTION_DBS, kraken_db=None, contig_tax=None):
     tax = taxonomy(base, sample, kraken_db=kraken_db)
+    notes = []
     if contig_tax:
-        ct, _ = contig_taxonomy_rows(contig_tax, base, sample)
+        ct, notes = contig_taxonomy_rows(contig_tax, base, sample)
+        notes = notes or ["contig taxonomy: no LCA table found"]
         if len(ct):
             tax = pd.concat([tax, ct], ignore_index=True) if len(tax) else ct
     return {"qc": qc(base, sample), "taxonomy": tax, "bins": bins(base, sample),
             "bin_abundance": bin_abundance(base, sample), "functions": functions(base, sample, function_dbs),
-            "_omics": omics_present(base)}
+            "_omics": omics_present(base), "_notes": ["contig taxonomy " + n if not n.startswith("contig") else n
+                                                      for n in notes]}

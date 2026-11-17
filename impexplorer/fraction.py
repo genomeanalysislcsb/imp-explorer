@@ -86,6 +86,8 @@ def _one(args):
             res = imp3.read_sample(base, sid, dbs, kdb, ctax)
             out = rename(res, sid, suffix)
             omics = ["%s_%s" % (o, suffix) for o in res["_omics"]]
+            for n in res.get("_notes", []):
+                say("  %s: %s" % (sid, n))
         elif kdb:                                  # no IMP3 run (e.g. single-end ext mt): only the Kraken2 rerun
             tx = imp3.taxonomy(base, sid, kraken_db=kdb)
             if len(tx):

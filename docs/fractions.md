@@ -61,4 +61,6 @@ imp-explorer fraction --data release --imp-root /path/IMP/imp_ext_mg --suffix ex
 
 Contig names are matched to the read counts exactly, or by their last `_` field (`SBHC01_merged_C0000100779` vs
 `C0000100779`). The profile is taxonomy source `mmseqs2_gtdb`, cohort layers `contig.genus.mg_ext` etc.; `export`
-takes the same option for the main assemblies.
+takes the same option for the main assemblies. Without `{omic}` in the pattern one table serves both omics: the mg and
+the mt reads on the (co-)assembly give the profiles `contig.genus.mg` and `contig.genus.mt`. Per sample the log shows how
+many contigs were matched to read counts; check it on the first run.

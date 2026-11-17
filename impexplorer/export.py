@@ -178,6 +178,8 @@ def main(argv=None):
             omics[sid] = res["_omics"]
             print("[export] %d/%d %s: %s" % (i, len(jobs), sid, ", ".join(
                 "%s %d" % (k, len(res[k])) for k in TABLE_ORDER)), file=sys.stderr)
+            for n in res.get("_notes", []):
+                print("[export]   %s: %s" % (sid, n), file=sys.stderr)
 
     sheet["imp_dir"] = store_paths(sheet["imp_dir"], a.paths, root)
     sheet["has_mg"] = sheet["sample_id"].map(lambda s: "mg" in omics.get(s, []))
