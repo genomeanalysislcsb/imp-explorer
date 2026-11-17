@@ -194,12 +194,22 @@ def _motus(path, sample, omic):
     return rows
 
 
-def taxonomy(base, sample, ranks=("D", "P", "C", "O", "F", "G", "S")):
+def taxonomy(base, sample, ranks=("D", "P", "C", "O", "F", "G", "S"), kraken_db=None):
+    """Kraken2 / Bracken and mOTUs profiles. kraken_db: name of a Kraken2 database rerun, read from
+    Analysis/taxonomy/bracken_<db>/<omic>/<omic>.combined.<rank>.bracken (paired + single reads; domain = R1);
+    without it the IMP3 Bracken outputs. With kraken_db only that database is read (no fallback), so a release
+    never mixes two databases."""
     rows = []
     level_name = {"D": "domains", "P": "phylums", "C": "classes", "O": "orders", "F": "families", "G": "genuses",
                   "S": "species"}
     for o in OMICS:
         for rc in ranks:
+            if kraken_db:
+                b = find(base, *["Analysis/taxonomy/bracken_%s/%s/%s.combined.%s.bracken" % (kraken_db, o, o, x)
+                                 for x in ((rc, "R1") if rc == "D" else (rc,))])
+                if b:
+                    rows += _bracken(b, sample, o, KRAKEN_RANKS[rc])
+                continue
             # IMP3 >= 3.0: Analysis/taxonomy/bracken/<omic>/<rank>.bracken; older: kraken/<omic>.kraken_bracken_*.report
             b = find(base, "Analysis/taxonomy/bracken/%s/%s.bracken" % (o, rc))
             if b:
@@ -317,7 +327,7 @@ def functions(base, sample, dbs=DEFAULT_FUNCTION_DBS):
 
 
 # ----------------------------------------------------------------------------- one sample
-def read_sample(base, sample, function_dbs=DEFAULT_FUNCTION_DBS):
-    return {"qc": qc(base, sample), "taxonomy": taxonomy(base, sample), "bins": bins(base, sample),
+def read_sample(base, sample, function_dbs=DEFAULT_FUNCTION_DBS, kraken_db=None):
+    return {"qc": qc(base, sample), "taxonomy": taxonomy(base, sample, kraken_db=kraken_db), "bins": bins(base, sample),
             "bin_abundance": bin_abundance(base, sample), "functions": functions(base, sample, function_dbs),
             "_omics": omics_present(base)}

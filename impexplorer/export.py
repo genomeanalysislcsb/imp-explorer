@@ -89,9 +89,9 @@ def read_sheet(path):
 
 
 def _one(args):
-    sid, base, dbs = args
+    sid, base, dbs, kdb = args
     try:
-        return sid, base, imp3.read_sample(base, sid, dbs), None
+        return sid, base, imp3.read_sample(base, sid, dbs, kdb), None
     except Exception as e:                       # one broken sample must not stop the export
         return sid, base, None, "%s: %s" % (type(e).__name__, e)
 
@@ -114,6 +114,9 @@ def main(argv=None):
     ap.add_argument("--study", default="study", help="study name shown in the explorer")
     ap.add_argument("--function-dbs", default=",".join(imp3.DEFAULT_FUNCTION_DBS),
                     help="Mantis databases to export [%(default)s]")
+    ap.add_argument("--kraken-db", default="", help="Kraken2 database of a rerun: read "
+                    "Analysis/taxonomy/bracken_<db>/<omic>/<omic>.combined.<rank>.bracken instead of IMP3's Bracken "
+                    "output, e.g. k2_gtdb_genome_reps_20250609  [IMP3 output]")
     ap.add_argument("--format", choices=("auto", "parquet", "tsv"), default="auto")
     ap.add_argument("--threads", type=int, default=4)
     a = ap.parse_args(argv)
@@ -155,7 +158,7 @@ def main(argv=None):
 
     parts = {k: [] for k in TABLE_ORDER}
     omics, errors = {}, {}
-    jobs = list(zip(sheet["sample_id"], sheet["imp_dir"], [dbs] * len(sheet)))
+    jobs = list(zip(sheet["sample_id"], sheet["imp_dir"], [dbs] * len(sheet), [a.kraken_db or None] * len(sheet)))
     # 'spawn': fresh worker processes. Forking a process that already runs threads (DuckDB, an app, a test run)
     # can kill the workers (BrokenProcessPool), seen with Python 3.12.
     with cf.ProcessPoolExecutor(max_workers=max(1, a.threads), mp_context=mp.get_context("spawn")) as ex:
@@ -181,7 +184,8 @@ def main(argv=None):
     for k in TABLE_ORDER:
         df = pd.concat(parts[k], ignore_index=True) if parts[k] else pd.DataFrame(columns=TABLES[k]["columns"])
         written[k] = (df, write_table(df, a.out, k, a.format))
-    m = write_manifest(a.out, written, a.study, {"pipeline": "IMP3", "function_dbs": list(dbs)},
+    m = write_manifest(a.out, written, a.study, {"pipeline": "IMP3", "function_dbs": list(dbs),
+                                                     "kraken_db": a.kraken_db or "IMP3 output"},
                        {"failed_samples": errors, "metadata_without_output": unmatched_md})
     print("[export] %s: %s" % (a.out, ", ".join("%s %d" % (k, v["rows"]) for k, v in m["tables"].items())),
           file=sys.stderr)

@@ -937,3 +937,63 @@ def test_fraction(tmp_path):
     assert "has_mg_ext" not in read_manifest(str(rel))["cohort"]["covariates"]
     pv = read_table(str(rel), "cohort_paper_variance")
     assert "kraken.genus.mg_ext" in set(pv["layer"])
+
+
+def test_kraken_db(tmp_path):
+    """--kraken-db: export and fraction read a Kraken2 / Bracken rerun (bracken_<db>/<omic>/<omic>.combined.<rank>
+    .bracken, domain = R1) instead of IMP3's output, also for a fraction without an IMP3 run (--remap-only)"""
+    import glob
+    import shutil
+    from impexplorer import fraction
+    db = "k2_gtdb_test"
+    root = make_fixture.main(str(tmp_path), n=24)
+
+    def rerun(base, omics, tag):
+        for o in omics:
+            for rc, x in (("G", "G"), ("P", "P"), ("S", "S"), ("D", "R1")):
+                src = glob.glob(os.path.join(base, "Analysis", "taxonomy", "bracken", o, "%s.bracken*" % rc))
+                d = os.path.join(base, "Analysis", "taxonomy", "bracken_%s" % db, o)
+                os.makedirs(d, exist_ok=True)
+                lines = ["name\ttaxonomy_id\ttaxonomy_lvl\tkraken_assigned_reads\tadded_reads\tnew_est_reads\t"
+                         "fraction_total_reads\n", "%sTaxon\t1\t%s\t10\t0\t10\t1.0\n" % (tag, x)]
+                if src and rc == "G":
+                    import gzip
+                    op = gzip.open if src[0].endswith(".gz") else open
+                    with op(src[0], "rt") as fh:
+                        lines = [fh.readline()] + [tag + l for l in fh]
+                for kind in ("combined", "pe"):
+                    with open(os.path.join(d, "%s.%s.%s.bracken" % (o, kind, x)), "w") as fh:
+                        fh.write("".join(lines) if kind == "combined" else lines[0])
+
+    dirs = sorted(os.path.join(root, d) for d in os.listdir(root))
+    for b in dirs:
+        rerun(b, ("mg", "mt"), "re_")
+    rel = tmp_path / "release"
+    export.main(["--imp-root", root, "--metadata", str(tmp_path / "metadata.tsv"), "--out", str(rel), "--threads", "2",
+                 "--kraken-db", db])
+    tax = read_table(str(rel), "taxonomy")
+    kr = tax[tax["source"] == "kraken2_bracken"]
+    assert len(kr) and kr["taxon"].astype(str).str.startswith("re_").all()     # only the rerun, no IMP3 output
+    assert set(kr["rank"]) >= {"genus", "domain"}
+    assert read_manifest(str(rel))["sources"]["kraken_db"] == db
+    # a fraction with remapped counts and a Kraken2 rerun only (single-end ext mt): taxonomy as mt_ext
+    ext_mt = tmp_path / "imp_ext_mt"
+    ids = sorted(read_table(str(rel), "samples")["sample_id"].astype(str))
+    for i, sid in enumerate(ids[:20]):
+        src = dirs[i]
+        ann = ext_mt / sid / "remapping" / "annotation"
+        os.makedirs(ann)
+        for f in os.listdir(os.path.join(src, "Analysis", "annotation")):
+            if f.startswith("mt.mantis.") and ".counts.tsv" in f:
+                shutil.copy(os.path.join(src, "Analysis", "annotation", f), ann / f)
+        os.makedirs(ext_mt / sid / "Analysis" / "taxonomy")
+        shutil.copytree(os.path.join(src, "Analysis", "taxonomy", "bracken_%s" % db, "mt"),
+                        ext_mt / sid / "Analysis" / "taxonomy" / ("bracken_%s" % db) / "mt")
+        rerun(str(ext_mt / sid), (), "")
+    assert fraction.main(["--data", str(rel), "--imp-root", str(ext_mt), "--remap-only", "--threads", "2"]) == 0
+    tax = read_table(str(rel), "taxonomy")
+    assert tax[tax["omic"] == "mt_ext"]["sample_id"].nunique() == 20
+    fr = read_manifest(str(rel))["fractions"]
+    assert fr["mt_ext"]["tables"] == ["taxonomy"] and fr["mt_ext"]["kraken_db"] == db
+    assert "functions" in fr["mt_ext_remap"]["tables"]
+    assert read_table(str(rel), "samples")["has_mt_ext"].sum() == 20

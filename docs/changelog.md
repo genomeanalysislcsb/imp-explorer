@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- **Kraken2 database reruns** (`--kraken-db <db>` for `export` and `fraction`): read the Bracken profiles of a rerun
+  (`Analysis/taxonomy/bracken_<db>/<omic>/<omic>.combined.<rank>.bracken`, domain from `R1`) instead of IMP3's own,
+  so all fractions use the same database; only that database is read (no mixing). `fraction` takes the release's
+  database by default and also reads the rerun of a fraction without an IMP3 run (`--remap-only`, e.g. the single-end
+  extracellular mt -> `mt_ext`). The manifest records the database (`sources.kraken_db`, per fraction) and which
+  tables a fraction has, and the cohort adds only those layers; `kraken.genus.mt_ext` joins the auto concordance set.
 - **Sample QC per layer** (`imp-explorer qc`, table `sample_qc`): every sample keeps its place in the release and
   gets a status (PASS, WARN, FAIL, missing) in each layer, from automatic rules, the sRNA-IMP verdicts and a manual
   flags file (e.g. a paper's exclusions with their reasons). The app has a QC switch in the top bar (all samples /

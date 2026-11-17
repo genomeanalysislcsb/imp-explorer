@@ -92,9 +92,12 @@ def main(argv=None):
                 a.layers += "".join(",%s.%s" % (d, o) for d in ("kegg_module", "kegg_pathway", "cazy", "kegg_ko") +
                                     tuple(x for x in ("pfam", "cog") if x in fdbs))
             else:
+                tb = fr[o].get("tables") or ("taxonomy", "bin_abundance", "functions")
                 a.layers += "".join(",%s.%s" % (k, o) for k in
-                                    ("kraken.genus", "kraken.species", "mag.genus", "kegg_module", "kegg_pathway",
-                                     "cazy", "kegg_ko") + tuple(x for x in ("pfam", "cog") if x in fdbs))
+                                    (("kraken.genus", "kraken.species") if "taxonomy" in tb else ()) +
+                                    (("mag.genus",) if "bin_abundance" in tb else ()) +
+                                    (("kegg_module", "kegg_pathway", "cazy", "kegg_ko") +
+                                     tuple(x for x in ("pfam", "cog") if x in fdbs) if "functions" in tb else ()))
     if default and table_path(a.data, "prot_samples"):
         a.layers += ",prot"                   # metaproteomics: genus and KEGG layers of every fraction
     if a.concordance:                         # the layers the concordance sets need

@@ -29,3 +29,21 @@ The folders below `--imp-root` are named like the release's sample ids (or trans
   IMP3 run; function layers only for remapped reads (`kegg_ko.mt_ext_remap`, `pfam.mt_ext_remap`, ...).
 - A fraction that is not usable (e.g. degraded RNA) stays in the release and can be flagged for every sample in the
   [QC flags file](sample-qc.md) (`layer` = `mt_ext_remap`), so it is shown but left out with the QC switch.
+
+## Kraken2 database reruns
+
+When the taxonomy was rerun with another Kraken2 database (so that all fractions use the same one), export and add
+the fractions with that database:
+
+```bash
+imp-explorer export   --imp-root /path/IMP/intra_MGMT --kraken-db k2_gtdb_genome_reps_20250609 ...
+imp-explorer fraction --data release --imp-root /path/IMP/imp_ext_mg --suffix ext
+imp-explorer fraction --data release --imp-root /path/IMP/imp_ext_mt --suffix ext --remap-only
+```
+
+Per sample and omic the profiles are read from
+`Analysis/taxonomy/bracken_<db>/<omic>/<omic>.combined.<rank>.bracken` (paired and single reads together; ranks
+R1 = domain, P, C, O, F, G, S). With `--kraken-db` only this database is read: a sample without the rerun has no
+Kraken taxa rather than those of the other database. `fraction` uses the release's database unless `--kraken-db` is
+given, and reads it also for a fraction without an IMP3 run (`--remap-only`): the single-end extracellular mt then
+gets taxa as `mt_ext` next to its remapped functions (`mt_ext_remap`).

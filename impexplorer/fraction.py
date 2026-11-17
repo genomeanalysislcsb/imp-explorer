@@ -8,6 +8,8 @@ Per sample folder (named like the release's sample ids, translated with --id-map
 
   IMP3 run of the fraction (Stats/, Analysis/, Binning/)   -> omics <omic>_<suffix>: mg_ext (read QC, Kraken2 /
       Bracken and mOTUs taxa, MAGs and their abundance, Mantis functions), as for the main export
+  Analysis/taxonomy/bracken_<db>/<omic>/...  (--kraken-db)  -> taxa of <omic>_<suffix> from a Kraken2 rerun, also
+      with --remap-only / without an IMP3 run (e.g. the single-end extracellular mt)
   remapping/annotation/<omic>.mantis.<db>.counts.tsv        -> omics <omic>_<suffix>_remap: the fraction's reads
       counted on the annotation of the main (e.g. intracellular) assembly (featureCounts tables, as IMP3 writes them)
 
@@ -76,14 +78,19 @@ def rename(res, sample, suffix):
 
 
 def _one(args):
-    sid, base, dbs, suffix, remap_only = args
+    sid, base, dbs, suffix, remap_only, kdb = args
     try:
         out = {k: pd.DataFrame() for k in TABLES_}
         omics = []
         if not remap_only and os.path.isdir(os.path.join(base, "Stats")):
-            res = imp3.read_sample(base, sid, dbs)
+            res = imp3.read_sample(base, sid, dbs, kdb)
             out = rename(res, sid, suffix)
             omics = ["%s_%s" % (o, suffix) for o in res["_omics"]]
+        elif kdb:                                  # no IMP3 run (e.g. single-end ext mt): only the Kraken2 rerun
+            tx = imp3.taxonomy(base, sid, kraken_db=kdb)
+            if len(tx):
+                out["taxonomy"] = rename({**{k: pd.DataFrame() for k in TABLES_}, "taxonomy": tx}, sid, suffix)["taxonomy"]
+                omics += ["%s_%s" % (o, suffix) for o in sorted(set(tx["omic"]))]
         rf = remap_functions(base, sid, dbs, suffix)
         if len(rf):
             out["functions"] = pd.concat([out["functions"], rf], ignore_index=True) if len(out["functions"]) else rf
@@ -106,6 +113,8 @@ def main(argv=None):
     ap.add_argument("--id-regex", help="regular expression; its first group (or match) is the sample id")
     ap.add_argument("--id-case", choices=("keep", "upper", "lower"), default="keep")
     ap.add_argument("--function-dbs", default="", help="Mantis databases  [those of the release]")
+    ap.add_argument("--kraken-db", default=None, help="Kraken2 database of a rerun (as for export)  [the release's "
+                    "kraken_db]")
     ap.add_argument("--format", choices=("auto", "parquet", "tsv"), default="auto")
     ap.add_argument("--threads", type=int, default=4)
     a = ap.parse_args(argv)
@@ -124,7 +133,9 @@ def main(argv=None):
     smp = read_table(a.data, "samples")
     smp["sample_id"] = smp["sample_id"].astype(str)
     rel_ids = set(smp["sample_id"])
-    jobs = [(sid, base, dbs, a.suffix, a.remap_only) for sid, (_, base) in zip(ids, found) if sid in rel_ids]
+    kdb = a.kraken_db if a.kraken_db is not None else man.get("sources", {}).get("kraken_db", "")
+    kdb = None if kdb in ("", "IMP3 output") else kdb
+    jobs = [(sid, base, dbs, a.suffix, a.remap_only, kdb) for sid, (_, base) in zip(ids, found) if sid in rel_ids]
     unknown = sorted(set(ids) - rel_ids)
     if unknown:
         say("%d folders are not samples of the release (left out; check --id-*): %s"
@@ -167,7 +178,10 @@ def main(argv=None):
         base = o.split("_")[0]
         fr[o] = {"label": "%s %s%s" % (label, {"mg": "metagenome", "mt": "metatranscriptome"}.get(base, base),
                                        " (reads on the main assembly)" if o.endswith("_remap") else ""),
-                 "source": os.path.abspath(a.imp_root), "samples": sum(1 for v in omics.values() if o in v)}
+                 "source": os.path.abspath(a.imp_root), "samples": sum(1 for v in omics.values() if o in v),
+                 "tables": [k for k in TABLES_ if any(len(p) and "omic" in p.columns and (p["omic"] == o).any()
+                                                      for p in parts[k])],
+                 "kraken_db": kdb or "IMP3 output"}
     m.setdefault("failed_fraction_samples", {}).update(errors)
     with open(os.path.join(a.data, "manifest.json"), "w") as fh:
         json.dump(m, fh, indent=2, default=str)
