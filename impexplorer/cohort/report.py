@@ -379,7 +379,7 @@ class Report:
 
             def kind(l):
                 return "metrics" if l == "metrics" else "ratio" if l.startswith("ratio") else "mag" if l.startswith(
-                    "mag") else "tax" if l.startswith(("kraken", "motus")) else "fn"
+                    "mag") else "tax" if l.startswith(("kraken", "motus", "contig")) else "fn"
             for ax, m in zip(axs, ms):
                 d = vfoc[(vfoc["model"] == m) & vfoc["p"].notna()]
                 for kd, x in d.groupby(d["layer"].map(kind)):

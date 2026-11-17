@@ -29,7 +29,7 @@ from .paper import qc_drop, qc_layer
 from .stats import bh, bray_curtis, clr, rankdata, spearman, t_p
 
 AUTO = {"genus": ["kraken.genus.mg", "kraken.genus.mt", "kraken.genus.mg_ext", "kraken.genus.mt_ext",
-                  "prot.genus.intra",
+                  "contig.genus.mg", "contig.genus.mg_ext", "prot.genus.intra",
                   "prot.genus.extra", "srna.genus.srna_int", "srna.genus.srna_ext"],
         "pfam": ["pfam.mg", "pfam.mt", "pfam.mg_ext", "pfam.mt_ext_remap", "prot.pfam.intra", "prot.pfam.extra"]}
 MIN_SHARED = 10

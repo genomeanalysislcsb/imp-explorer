@@ -12,7 +12,8 @@ from ..release import read_manifest, read_table
 from .stats import clr, column_kind, is_missing
 
 GLOBAL_MAPS = re.compile(r"^(ko|map)01[12]\d\d$")       # KEGG global / overview maps: not tested
-LAYER_LABEL = {"kraken": "Kraken2/Bracken", "motus": "mOTUs", "mag": "MAGs (GTDB)", "kegg_module": "KEGG module",
+TAX_SOURCE = {"kraken": "kraken2_bracken", "motus": "motus", "contig": "mmseqs2_gtdb"}
+LAYER_LABEL = {"kraken": "Kraken2/Bracken", "motus": "mOTUs", "contig": "contigs (MMseqs2, GTDB)", "mag": "MAGs (GTDB)", "kegg_module": "KEGG module",
                "kegg_pathway": "KEGG pathway", "kegg_ko": "KEGG KO", "cazy": "CAZy", "enzyme_ec": "EC", "pfam": "Pfam", "cog": "COG"}
 OMIC = {"mg": "metagenome", "mt": "metatranscriptome"}
 
@@ -300,10 +301,10 @@ class Cohort:
                     self.metab_layer(key, parts[1])
                 elif parts[0] == "prot":
                     self.prot_layer(key, parts[1], parts[2])
-                elif parts[0] in ("kraken", "motus"):
+                elif parts[0] in TAX_SOURCE:
                     if tax is None:
                         tax = read_table(self.release, "taxonomy")
-                    src = "kraken2_bracken" if parts[0] == "kraken" else "motus"
+                    src = TAX_SOURCE[parts[0]]
                     d = tax[(tax["source"] == src) & (tax["rank"] == parts[1]) & (tax["omic"] == parts[2])]
                     if src == "motus" and parts[1] == "species" and d.empty:
                         d = self._old_motus(tax, parts[2])

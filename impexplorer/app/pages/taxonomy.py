@@ -12,7 +12,7 @@ from ._common import (omics_boxes, HEAT_COLS, HEAT_ROWS, HEAT_VALUES, box_by_gro
                       ordination, selection, stacked)
 from .functions import annot_options, annot_series, default_annot
 
-SOURCE = {"kraken2_bracken": "Kraken2/Bracken", "motus": "mOTUs", "metaproteomics": "Metaproteomics"}
+SOURCE = {"kraken2_bracken": "Kraken2/Bracken", "motus": "mOTUs", "mmseqs2_gtdb": "Contigs (MMseqs2, GTDB)", "metaproteomics": "Metaproteomics"}
 RANK_ORDER = ["domain", "phylum", "class", "order", "family", "genus", "species", "motu"]
 
 

@@ -22,7 +22,7 @@ KINDS = [("taxa", "taxa"), ("mags", "MAGs"), ("functions", "functions"), ("prot"
 
 def kind_of(layer):
     p = str(layer).split(".")[0]
-    if p in ("kraken", "motus"):
+    if p in ("kraken", "motus", "contig"):
         return "taxa"
     if p == "mag":
         return "mags"

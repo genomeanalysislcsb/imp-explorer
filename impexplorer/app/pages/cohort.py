@@ -61,7 +61,7 @@ def layer_db(key):
         if s in ("genus", "family", "species"):
             return "gtdb"
         return s[3:] if s.startswith("fn_kegg_") or s == "fn_cog" else None
-    if p[0] in ("kraken", "mag", "motus") or (p[0] == "ratio" and p[1] == "mag"):
+    if p[0] in ("kraken", "mag", "motus", "contig") or (p[0] == "ratio" and p[1] == "mag"):
         return "gtdb" if p[0] != "motus" else None
     return p[1] if p[0] == "ratio" else p[0]
 
@@ -148,8 +148,9 @@ def feature_values(data, layer, feature):
         return d.set_index("sample_id")["v"]
 
     def get(parts):
-        if parts[0] in ("kraken", "motus"):
-            return tax("kraken2_bracken" if parts[0] == "kraken" else "motus", parts[1], parts[2])
+        if parts[0] in ("kraken", "motus", "contig"):
+            return tax({"kraken": "kraken2_bracken", "motus": "motus", "contig": "mmseqs2_gtdb"}[parts[0]], parts[1],
+                       parts[2])
         if parts[0] == "mag":
             return mag(parts[1], parts[2])
         return fun(parts[0], parts[1])

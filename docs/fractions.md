@@ -47,3 +47,18 @@ R1 = domain, P, C, O, F, G, S). With `--kraken-db` only this database is read: a
 Kraken taxa rather than those of the other database. `fraction` uses the release's database unless `--kraken-db` is
 given, and reads it also for a fraction without an IMP3 run (`--remap-only`): the single-end extracellular mt then
 gets taxa as `mt_ext` next to its remapped functions (`mt_ext_remap`).
+
+## Contig taxonomy (MMseqs2, GTDB)
+
+The contigs of an assembly classified with `mmseqs easy-taxonomy` against GTDB give a taxonomic profile of their own:
+per rank, the reads mapped to the contigs assigned at that rank or below. Pass the LCA tables as a file pattern with
+`{folder}` (the sample folder), `{sample}` and `{omic}`:
+
+```bash
+imp-explorer fraction --data release --imp-root /path/IMP/imp_ext_mg --suffix ext \
+  --contig-taxonomy '/path/IMP/imp_ext_mg/contigs/{folder}ext/{folder}ext.{omic}.GTDB_lca.tsv'
+```
+
+Contig names are matched to the read counts exactly, or by their last `_` field (`SBHC01_merged_C0000100779` vs
+`C0000100779`). The profile is taxonomy source `mmseqs2_gtdb`, cohort layers `contig.genus.mg_ext` etc.; `export`
+takes the same option for the main assemblies.

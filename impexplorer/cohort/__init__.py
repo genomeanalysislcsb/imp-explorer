@@ -83,6 +83,8 @@ def main(argv=None):
     if default and table_path(a.data, "metab_values"):
         a.layers += ",metab"                  # metabolomics of the release (imp-explorer metabolomics): every assay
     fdbs = read_manifest(a.data).get("sources", {}).get("function_dbs") or []
+    if default and read_manifest(a.data).get("sources", {}).get("contig_taxonomy"):
+        a.layers += ",contig.genus.mg,contig.genus.mt,contig.species.mg"     # contig taxonomy (export --contig-taxonomy)
     if default:                               # Pfam / COG of mg and mt, when exported (--function-dbs)
         a.layers += "".join(",%s.mg,%s.mt" % (d, d) for d in ("pfam", "cog") if d in fdbs)
     fr = read_manifest(a.data).get("fractions", {})
@@ -95,6 +97,7 @@ def main(argv=None):
                 tb = fr[o].get("tables") or ("taxonomy", "bin_abundance", "functions")
                 a.layers += "".join(",%s.%s" % (k, o) for k in
                                     (("kraken.genus", "kraken.species") if "taxonomy" in tb else ()) +
+                                    (("contig.genus", "contig.species") if fr[o].get("contig_taxonomy") else ()) +
                                     (("mag.genus",) if "bin_abundance" in tb else ()) +
                                     (("kegg_module", "kegg_pathway", "cazy", "kegg_ko") +
                                      tuple(x for x in ("pfam", "cog") if x in fdbs) if "functions" in tb else ()))

@@ -7,7 +7,7 @@ from dash import Input, Output, html, dcc
 from ..ui import GLOBAL, Page, card, empty_fig, graph, style
 from ._common import grid, qc_filter, selection
 
-SOURCE = {"kraken2_bracken": "Kraken2", "motus": "mOTUs"}
+SOURCE = {"kraken2_bracken": "Kraken2", "motus": "mOTUs", "mmseqs2_gtdb": "contigs"}
 COLS = ["layer", "kind", "name", "link", "samples", "mean_pct"]
 
 

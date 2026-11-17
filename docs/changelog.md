@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- **Contig taxonomy** (`--contig-taxonomy PATTERN` for `export` and `fraction`): the MMseqs2 `easy-taxonomy` LCA
+  table of each sample's contigs against GTDB (`<prefix>_lca.tsv`), weighted by the reads on the contigs
+  (`Stats/<omic>/*.assembly.contig_read_count.txt`), as taxonomy source `mmseqs2_gtdb`; cohort layers
+  `contig.<rank>.<omic>` (e.g. `contig.genus.mg_ext`, in the auto concordance set). Names in GTDB spelling
+  (`Blautia_A`), so they match the Kraken2 GTDB profiles.
 - **Kraken2 database reruns** (`--kraken-db <db>` for `export` and `fraction`): read the Bracken profiles of a rerun
   (`Analysis/taxonomy/bracken_<db>/<omic>/<omic>.combined.<rank>.bracken`, domain from `R1`) instead of IMP3's own,
   so all fractions use the same database; only that database is read (no mixing). `fraction` takes the release's

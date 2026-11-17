@@ -231,6 +231,82 @@ def taxonomy(base, sample, ranks=("D", "P", "C", "O", "F", "G", "S"), kraken_db=
     return df[TABLES["taxonomy"]["columns"]].reset_index(drop=True)
 
 
+LCA_PREFIX = {"d": "domain", "k": "domain", "p": "phylum", "c": "class", "o": "order", "f": "family", "g": "genus",
+              "s": "species"}
+
+
+def _gtdb_names(lineage):
+    """'d_Bacteria;...;g_Blautia A;s_Blautia A sp000' (mmseqs2 taxonomy of a GTDB database, '_' turned into ' ')
+    -> {rank: name} in GTDB / Kraken2-GTDB spelling: genus 'Blautia_A', species 'Blautia_A sp000'"""
+    out = {}
+    for part in str(lineage or "").split(";"):
+        m = re.match(r"^([a-z])_{1,2}(.+)$", part.strip())
+        if m and m.group(1) in LCA_PREFIX and m.group(2).strip():
+            out[LCA_PREFIX[m.group(1)]] = m.group(2).strip()
+    if "genus" in out:
+        g = out["genus"]
+        g_ = g.replace(" ", "_")
+        if "species" in out and out["species"].startswith(g + " "):
+            out["species"] = g_ + out["species"][len(g):]
+        out["genus"] = g_
+    return out
+
+
+def contig_reads(base, omic):
+    """{contig: reads} of an omic on the sample's assembly (Stats/<omic>/<assembly>.assembly.contig_read_count.txt)"""
+    ass = assembly_prefix(base)
+    rc = table(find(base, "Stats/%s/%s.assembly.contig_read_count.txt" % (omic, ass)), header=None,
+               names=["contig", "start", "end", "reads"])
+    return dict(zip(rc["contig"], num(rc["reads"]).fillna(0))) if len(rc) else {}
+
+
+def match_contigs(names, reads):
+    """map the contig names of a taxonomy file onto those of the read counts: exactly, else by the last '_' field
+    (e.g. 'SBHC01_merged_C0000100779' vs 'C0000100779') when that is unique on both sides"""
+    names = list(names)
+    if sum(n in reads for n in names) >= 0.5 * max(1, len(names)):
+        return {n: n for n in names if n in reads}
+    key = lambda x: str(x).rsplit("_", 1)[-1]
+    rk = {}
+    for c in reads:
+        rk.setdefault(key(c), []).append(c)
+    nk = {}
+    for n in names:
+        nk.setdefault(key(n), []).append(n)
+    return {v[0]: rk[k][0] for k, v in nk.items() if len(v) == 1 and len(rk.get(k, [])) == 1}
+
+
+def contig_taxonomy(path, base, sample, omic, read_omics=None):
+    """mmseqs2 easy-taxonomy LCA of the assembled contigs (<prefix>_lca.tsv: contig, taxid, rank, name, ..., lineage)
+    -> taxonomy rows of source 'mmseqs2_gtdb': per rank the reads of the omic on the contigs assigned at that rank or
+    below (Stats/<omic>/*.assembly.contig_read_count.txt). Unclassified contigs are left out. Returns rows and a note
+    (share of contigs with read counts)."""
+    t = table(path, header=None)
+    if t.empty or t.shape[1] < 9:
+        return [], "no LCA table"
+    rows, notes = [], []
+    lin = t.iloc[:, -1] if t.shape[1] >= 9 else None
+    for o in (read_omics or (omic,)):
+        reads = contig_reads(base, o)
+        if not reads:
+            notes.append("%s: no contig read counts" % o)
+            continue
+        mp = match_contigs(t.iloc[:, 0], reads)
+        notes.append("%s: %d of %d contigs matched" % (o, len(mp), len(t)))
+        acc = {}
+        for c, l in zip(t.iloc[:, 0], lin):
+            if c not in mp:
+                continue
+            r = reads.get(mp[c], 0)
+            if r <= 0:
+                continue
+            for rank, name in _gtdb_names(l).items():
+                acc[(rank, name)] = acc.get((rank, name), 0) + r
+        rows += [(sample, o if read_omics else omic, "mmseqs2_gtdb", rank, name, "", float(v))
+                 for (rank, name), v in acc.items()]
+    return rows, "; ".join(notes)
+
+
 # ----------------------------------------------------------------------------- bins
 _BIN_COLS = {"bin": "bin", "completeness": "completeness", "contamination": "contamination",
              "contig_n50": "contig_n50", "genome_size": "genome_size", "gc_content": "gc",
@@ -327,7 +403,35 @@ def functions(base, sample, dbs=DEFAULT_FUNCTION_DBS):
 
 
 # ----------------------------------------------------------------------------- one sample
-def read_sample(base, sample, function_dbs=DEFAULT_FUNCTION_DBS, kraken_db=None):
-    return {"qc": qc(base, sample), "taxonomy": taxonomy(base, sample, kraken_db=kraken_db), "bins": bins(base, sample),
+def contig_taxonomy_rows(pattern, base, sample, folder=None):
+    """contig taxonomy of the sample's assembly from a file pattern ({sample}, {folder}, {omic}; omic = the reads
+    counted on the contigs, mg and mt of the run); -> DataFrame in the taxonomy model, notes"""
+    rows, notes = [], []
+    for o in omics_present(base) or OMICS:
+        p = pattern.format(sample=sample, folder=folder or os.path.basename(base.rstrip("/")), omic=o)
+        hit = find("", p)
+        if not hit:
+            hit = find("", pattern.format(sample=sample, folder=folder or os.path.basename(base.rstrip("/")),
+                                          omic=assembly_prefix(base)))
+        if not hit:
+            continue
+        r, n = contig_taxonomy(hit, base, sample, o)
+        rows += r
+        notes.append(n)
+    if not rows:
+        return empty("taxonomy"), notes
+    df = pd.DataFrame(rows, columns=["sample_id", "omic", "source", "rank", "taxon", "taxid", "reads"])
+    df = df.groupby(["sample_id", "omic", "source", "rank", "taxon", "taxid"], as_index=False)["reads"].sum()
+    df["rel_abundance"] = df["reads"] / df.groupby(["omic", "rank"])["reads"].transform("sum")
+    return df[TABLES["taxonomy"]["columns"]], notes
+
+
+def read_sample(base, sample, function_dbs=DEFAULT_FUNCTION_DBS, kraken_db=None, contig_tax=None):
+    tax = taxonomy(base, sample, kraken_db=kraken_db)
+    if contig_tax:
+        ct, _ = contig_taxonomy_rows(contig_tax, base, sample)
+        if len(ct):
+            tax = pd.concat([tax, ct], ignore_index=True) if len(tax) else ct
+    return {"qc": qc(base, sample), "taxonomy": tax, "bins": bins(base, sample),
             "bin_abundance": bin_abundance(base, sample), "functions": functions(base, sample, function_dbs),
             "_omics": omics_present(base)}

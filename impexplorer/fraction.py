@@ -78,12 +78,12 @@ def rename(res, sample, suffix):
 
 
 def _one(args):
-    sid, base, dbs, suffix, remap_only, kdb = args
+    sid, base, dbs, suffix, remap_only, kdb, ctax = args
     try:
         out = {k: pd.DataFrame() for k in TABLES_}
         omics = []
         if not remap_only and os.path.isdir(os.path.join(base, "Stats")):
-            res = imp3.read_sample(base, sid, dbs, kdb)
+            res = imp3.read_sample(base, sid, dbs, kdb, ctax)
             out = rename(res, sid, suffix)
             omics = ["%s_%s" % (o, suffix) for o in res["_omics"]]
         elif kdb:                                  # no IMP3 run (e.g. single-end ext mt): only the Kraken2 rerun
@@ -115,6 +115,8 @@ def main(argv=None):
     ap.add_argument("--function-dbs", default="", help="Mantis databases  [those of the release]")
     ap.add_argument("--kraken-db", default=None, help="Kraken2 database of a rerun (as for export)  [the release's "
                     "kraken_db]")
+    ap.add_argument("--contig-taxonomy", default="", help="mmseqs2 LCA table of the fraction's contigs (as for "
+                    "export), e.g. '/path/imp_ext_mg/contigs/{folder}ext/{folder}ext.{omic}.GTDB_lca.tsv'")
     ap.add_argument("--format", choices=("auto", "parquet", "tsv"), default="auto")
     ap.add_argument("--threads", type=int, default=4)
     a = ap.parse_args(argv)
@@ -135,7 +137,7 @@ def main(argv=None):
     rel_ids = set(smp["sample_id"])
     kdb = a.kraken_db if a.kraken_db is not None else man.get("sources", {}).get("kraken_db", "")
     kdb = None if kdb in ("", "IMP3 output") else kdb
-    jobs = [(sid, base, dbs, a.suffix, a.remap_only, kdb) for sid, (_, base) in zip(ids, found) if sid in rel_ids]
+    jobs = [(sid, base, dbs, a.suffix, a.remap_only, kdb, a.contig_taxonomy or None) for sid, (_, base) in zip(ids, found) if sid in rel_ids]
     unknown = sorted(set(ids) - rel_ids)
     if unknown:
         say("%d folders are not samples of the release (left out; check --id-*): %s"
@@ -181,7 +183,8 @@ def main(argv=None):
                  "source": os.path.abspath(a.imp_root), "samples": sum(1 for v in omics.values() if o in v),
                  "tables": [k for k in TABLES_ if any(len(p) and "omic" in p.columns and (p["omic"] == o).any()
                                                       for p in parts[k])],
-                 "kraken_db": kdb or "IMP3 output"}
+                 "kraken_db": kdb or "IMP3 output",
+                 "contig_taxonomy": a.contig_taxonomy or ""}
     m.setdefault("failed_fraction_samples", {}).update(errors)
     with open(os.path.join(a.data, "manifest.json"), "w") as fh:
         json.dump(m, fh, indent=2, default=str)

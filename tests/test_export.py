@@ -997,3 +997,42 @@ def test_kraken_db(tmp_path):
     assert fr["mt_ext"]["tables"] == ["taxonomy"] and fr["mt_ext"]["kraken_db"] == db
     assert "functions" in fr["mt_ext_remap"]["tables"]
     assert read_table(str(rel), "samples")["has_mt_ext"].sum() == 20
+
+
+def test_contig_taxonomy(tmp_path):
+    """--contig-taxonomy: mmseqs2 easy-taxonomy LCA of the contigs (GTDB), weighted by the reads on the contigs"""
+    import gzip
+    from impexplorer import fraction
+    t = imp3._gtdb_names("d_Bacteria;p_Bacillota;c_Clostridia;o_Lachnospirales;f_Lachnospiraceae;g_Blautia A;"
+                         "s_Blautia A sp000")
+    assert t["genus"] == "Blautia_A" and t["species"] == "Blautia_A sp000" and t["domain"] == "Bacteria"
+    assert imp3.match_contigs(["S1_merged_C01", "S1_merged_C02"], {"C01": 1, "C02": 2}) == \
+        {"S1_merged_C01": "C01", "S1_merged_C02": "C02"}
+    root = make_fixture.main(str(tmp_path), n=24)
+    rel = tmp_path / "release"
+    export.main(["--imp-root", root, "--metadata", str(tmp_path / "metadata.tsv"), "--out", str(rel), "--threads", "2"])
+    ext = tmp_path / "imp_ext_mg"
+    import shutil
+    ids = sorted(read_table(str(rel), "samples")["sample_id"].astype(str))
+    folders = sorted(os.listdir(root))
+    for i, sid in enumerate(ids[:12]):
+        shutil.copytree(os.path.join(root, folders[i]), ext / sid)
+        rc = imp3.contig_reads(str(ext / sid), "mg")
+        lca = ext / "contigs" / ("%sext" % sid)
+        os.makedirs(lca)
+        lines = []
+        for j, c in enumerate(sorted(rc)):
+            g = ("Blautia A", "Faecousia")[j % 2]
+            lines.append("S%s_merged_%s\t1\tgenus\t%s\t1\t1\t1\t1.0\td_Bacteria;p_Bacillota;g_%s\n" % (sid, c, g, g))
+        lines.append("S%s_merged_X\t0\tno rank\tunclassified\t1\t0\t0\t0.000\t\n" % sid)
+        with open(lca / ("%sext.mg.GTDB_lca.tsv" % sid), "w") as fh:
+            fh.write("".join(lines))
+    assert fraction.main(["--data", str(rel), "--imp-root", str(ext), "--threads", "2", "--contig-taxonomy",
+                          str(ext / "contigs" / "{folder}ext" / "{folder}ext.{omic}.GTDB_lca.tsv")]) == 0
+    tax = read_table(str(rel), "taxonomy")
+    ct = tax[tax["source"] == "mmseqs2_gtdb"]
+    assert set(ct["omic"]) == {"mg_ext"} and ct["sample_id"].nunique() == 12
+    g = ct[ct["rank"] == "genus"]
+    assert set(g["taxon"]) == {"Blautia_A", "Faecousia"}
+    s0 = ct[(ct["sample_id"] == ids[0]) & (ct["rank"] == "domain")]["reads"].sum()
+    assert s0 == sum(v for v in imp3.contig_reads(str(ext / ids[0]), "mg").values())
