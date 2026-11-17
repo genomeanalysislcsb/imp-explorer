@@ -23,7 +23,7 @@ ALIASES = {"match_col": "block", "group": "group_col", "groups": "group_order", 
 CONFIG_KEYS = ("metadata", "dictionary", "id_col", "group_col", "group_order", "reference", "block", "covariates", "model",
                "model_notes", "permutations", "sig_q", "outlier_z", "qc_drop", "term_names", "name", "layers",
                "prevalence", "min_mg_pairs", "min_mt_pairs", "nmds", "nmds_starts", "paper_model", "paper_transform",
-               "paper_qc")
+               "paper_qc", "concordance")
 IGNORED = {"dir", "min_mirna_reads"}       # sRNA-specific COHORT_* keys without meaning here
 
 DEFAULT_LAYERS = ("kraken.genus.mg,kraken.genus.mt,kraken.species.mg,kraken.species.mt,"
@@ -123,6 +123,9 @@ layers: {layers}
 paper_model:
 paper_transform: tss      # count layers: tss (relative abundance) | clr
 paper_qc: FAIL            # sample_qc flags left out per layer: FAIL | WARN | none
+# agreement between layers (Mantel, alpha and feature correlations, overlap): sets of layers with the same features,
+#   'name=layer,layer; name2=...' or auto (genus: kraken / proteins / sRNA; pfam: mg, mt, proteins)
+concordance:
 """
 
 
@@ -175,6 +178,9 @@ def parser():
                     help="paper analysis, count layers: relative abundance (tss) or CLR  [tss]")
     ap.add_argument("--paper-qc", default=None, choices=("FAIL", "WARN", "none"),
                     help="paper analysis: samples flagged in the layer's sample_qc that are left out  [FAIL]")
+    ap.add_argument("--concordance", default=None, help="agreement between layers: 'auto' or sets of layers with "
+                    "the same features, 'genus=kraken.genus.mg,kraken.genus.mt,prot.genus.intra,srna.genus.srna_int; "
+                    "pfam=pfam.mg,pfam.mt,prot.pfam.intra' (Mantel, Shannon and feature correlations, overlap)  [off]")
     ap.add_argument("--term-names", default=None, help="TSV(s) term<TAB>name or KEGG flat files for readable labels")
     ap.add_argument("--name", default=None, help="title of the report  [study name]")
     ap.add_argument("--no-release-tables", action="store_true", help="do not write cohort_* tables into the release")
@@ -188,7 +194,8 @@ DEFAULTS = {"metadata": "", "dictionary": "", "id_col": "", "group_col": "group"
             "covariates": "", "model": "", "model_notes": "", "permutations": 999, "sig_q": 0.1, "outlier_z": 4.0,
             "qc_drop": "FAIL", "term_names": "", "name": "", "layers": DEFAULT_LAYERS, "prevalence": 0.1,
             "min_mg_pairs": 1e6, "min_mt_pairs": 1e6, "nmds": "kraken.genus.mg,kegg_pathway.mg", "nmds_starts": 5,
-            "paper_model": "", "paper_transform": "tss", "paper_qc": "FAIL"}
+            "paper_model": "", "paper_transform": "tss", "paper_qc": "FAIL",
+            "concordance": ""}
 TYPES = {"permutations": int, "nmds_starts": int, "sig_q": float, "outlier_z": float, "prevalence": float, "min_mg_pairs": float,
          "min_mt_pairs": float}
 

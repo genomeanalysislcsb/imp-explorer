@@ -11,7 +11,8 @@ CORE_TABLES = ("samples", "qc", "taxonomy", "bins", "bin_abundance", "functions"
 COHORT_TABLES = ("cohort_models", "cohort_models_overview", "cohort_tests", "cohort_metric_tests", "cohort_permanova",
                  "cohort_dispersion", "cohort_ordination", "cohort_samples", "cohort_covariates", "cohort_qc",
                  "cohort_mag_prevalence", "cohort_paper_anova", "cohort_paper_permanova",
-                 "cohort_paper_variance")     # written by 'imp-explorer cohort'; optional
+                 "cohort_paper_variance", "cohort_concord_presence", "cohort_concord_alpha",
+                 "cohort_concord_mantel", "cohort_concord_features")   # written by 'imp-explorer cohort'; optional
 SRNA_TABLES = ("srna_samples", "srna_qc", "srna_features", "srna_tests", "srna_models", "srna_models_overview",
                "srna_permanova", "srna_dispersion", "srna_ordination", "srna_covariates")   # 'imp-explorer srna'
 PROT_TABLES = ("prot_taxonomy", "prot_functions", "prot_samples", "prot_proteins", "prot_abundance")  # 'proteomics'

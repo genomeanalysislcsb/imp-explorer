@@ -210,6 +210,30 @@ p, q), `cohort_paper_permanova` (layer, term, n, distance, df, ss, r2, F, p, q) 
 and term: r2 and p of Shannon and of the PERMANOVA, median r2 over the features, share of features with q <
 `--sig-q`); the same as `stats/cohort.paper_*.tsv`.
 
+### Agreement between layers (`--concordance`)
+
+How the omics of the same samples agree, in sets of layers with the same features:
+
+```bash
+imp-explorer cohort --data release_v0.4 --concordance auto
+imp-explorer cohort --data release_v0.4 \
+    --concordance "genus=kraken.genus.mg,kraken.genus.mt,prot.genus.intra,prot.genus.extra,srna.genus.srna_int;
+                   pfam=pfam.mg,pfam.mt,prot.pfam.intra,prot.pfam.extra"
+```
+
+`auto` = these two sets with the layers the release has; `srna.<set>.<fraction>` is an imported sRNA-IMP profile
+(e.g. its rRNA-based genera). Per set, on the samples two layers share (FAIL in a layer's `sample_qc` left out):
+
+| table | what |
+|---|---|
+| `cohort_concord_presence` | per layer and feature: samples with the feature, prevalence, median relative abundance and median CLR (overlap, sparsity, top features) |
+| `cohort_concord_alpha` | Spearman ρ of Shannon diversity between every two layers |
+| `cohort_concord_mantel` | Mantel test between every two layers: Pearson r of the Bray–Curtis distances, samples permuted (`--permutations`), one-sided p |
+| `cohort_concord_features` | Spearman ρ of each feature between two layers (detected in ≥ `--prevalence` of the shared samples in both) |
+
+BH-FDR over the pairs of a set (alpha, Mantel) and per pair (features). The app shows them on the Concordance page.
+Feature names must match between layers (GTDB genus names, Pfam accessions).
+
 ## Output
 
 ```text

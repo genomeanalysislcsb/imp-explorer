@@ -70,6 +70,7 @@ start it on a node and open it through an SSH tunnel (`ssh -L 8050:<node>:8050 <
 | Proteomics | metaproteomics (optional, `imp-explorer proteomics`): library QC, which genera make the proteins of a KEGG term, a genus's main KEGG terms, the proteins of a term |
 | Metabolomics | metabolomics assays (optional, `imp-explorer metabolomics`): clustered heatmap per assay, one metabolite by group in the assay's units, its correlation with taxa / functions of the same samples, feature table |
 | Cohort | results of `imp-explorer cohort` (and of the sRNA-IMP cohort analysis; proteins and metabolomics as layers `prot.*` / `metab.*`): group comparisons within blocks, adjusted models (volcano + table per model, layer, term), beta diversity, QC and covariates |
+| Concordance | agreement between layers (`imp-explorer cohort --concordance`): overlap, top features, sparsity, Shannon and Mantel correlations, the same feature in two layers |
 | Variance | the paper analysis (`imp-explorer cohort --paper-model`): variance explained per layer and term, terms ranked across layers, unexplained variance, significant features per term |
 
 The top bar sets the grouping variable (any metadata column with 2–12 values) and a sample filter for all pages, e.g.

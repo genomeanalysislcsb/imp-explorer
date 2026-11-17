@@ -25,7 +25,9 @@ RELEASE_TABLES = {   # cohort result -> release table read by the app
     "ordination": "cohort_ordination", "sample_metrics": "cohort_samples", "covariates": "cohort_covariates",
     "qc_flags": "cohort_qc", "mag_prevalence": "cohort_mag_prevalence",
     "paper_anova": "cohort_paper_anova", "paper_permanova": "cohort_paper_permanova",
-    "paper_variance": "cohort_paper_variance"}
+    "paper_variance": "cohort_paper_variance", "concord_presence": "cohort_concord_presence",
+    "concord_alpha": "cohort_concord_alpha", "concord_mantel": "cohort_concord_mantel",
+    "concord_features": "cohort_concord_features"}
 
 
 def write_outputs(C, A, res, a):
@@ -61,6 +63,7 @@ def settings_dict(C, A, a):
             "nmds": a.nmds, "nmds_starts": getattr(a, "nmds_starts", None),
             "paper": {"model": a.paper_model, "transform": a.paper_transform, "qc": a.paper_qc}
             if a.paper_model else {},
+            "concordance": a.concordance,
             "samples": len(C.samples), "kept": len(C.kept), "excluded": C.excluded,
             "config": os.path.abspath(a.config) if a.config else "", "from_config": a.from_config, "notes": C.log}
 
@@ -84,6 +87,12 @@ def main(argv=None):
         a.layers += "".join(",%s.mg,%s.mt" % (d, d) for d in ("pfam", "cog") if d in fdbs)
     if default and table_path(a.data, "prot_samples"):
         a.layers += ",prot"                   # metaproteomics: genus and KEGG layers of every fraction
+    if a.concordance:                         # the layers the concordance sets need
+        from .concord import needed_layers, parse
+        have = [k.strip() for k in C.expand_metab(a.layers).split(",")]
+        extra = [k for k in needed_layers(parse(a.concordance)) if k not in have]
+        if extra:
+            a.layers += "," + ",".join(extra)
     C.load_layers(a.layers)
     C.note("layers: " + ", ".join("%s (%d x %d)" % (k, L.M.shape[0], L.M.shape[1]) for k, L in C.layers.items()))
     A = Analysis(C)
@@ -91,6 +100,9 @@ def main(argv=None):
     if a.paper_model:
         from .paper import run as run_paper
         res.update(run_paper(C, a))
+    if a.concordance:
+        from .concord import run as run_concord
+        res.update(run_concord(C, a))
     write_outputs(C, A, res, a)
     st = settings_dict(C, A, a)
     with open(os.path.join(a.out, "cohort.settings.json"), "w") as fh:

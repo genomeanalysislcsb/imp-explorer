@@ -827,3 +827,56 @@ def test_paper_model(tmp_path):
     s_, hits = variance.sig_features(d, "kraken.genus.mg", "group", 0.1)
     assert set(s_["term"]) == {"group", "site", "age", "sex", "depth"} and len(hits) == 10
     assert variance.layout(d) is not None
+
+
+def test_concordance(tmp_path):
+    """cohort --concordance: presence, Shannon correlation, Mantel and feature correlations between layers"""
+    import numpy as np
+    from impexplorer import cohort, proteomics
+    from impexplorer.cohort.concord import feature_cor, mantel, parse
+    from impexplorer.cohort.stats import bray_curtis
+    rng = np.random.default_rng(1)
+    X = rng.random((25, 12))
+    D = bray_curtis(X / X.sum(1, keepdims=True))
+    r, p = mantel(D, D, 99)
+    assert abs(r - 1) < 1e-9 and p == 0.01
+    r, p = mantel(D, bray_curtis(rng.random((25, 12))), 99)
+    assert abs(r) < 0.3 and p > 0.05
+    A = pd.DataFrame(X, columns=list("abcdefghijkl"))
+    fc = feature_cor(A, A * 3, 0.1)
+    assert len(fc) == 12 and np.allclose(fc["rho"], 1)
+    assert parse("auto")["pfam"][0] == "pfam.mg" and parse("g=a,b; f=c")["f"] == ["c"]
+    root = make_fixture.main(str(tmp_path), n=30)
+    rel = tmp_path / "release"
+    export.main(["--imp-root", root, "--metadata", str(tmp_path / "metadata.tsv"), "--out", str(rel), "--threads", "2"])
+    make_prot_tables(str(tmp_path / "prot"), pd.read_csv(tmp_path / "metadata.tsv", sep="\t"))
+    proteomics.main(["--data", str(rel), "--prot", str(tmp_path / "prot"), "--id-case", "upper"])
+    rc = cohort.main(["--data", str(rel), "--permutations", "49", "--no-report", "--layers", "kraken.genus.mg",
+                      "--concordance", "genus=kraken.genus.mg,kraken.genus.mt,prot.genus.intra,prot.genus.extra"])
+    assert rc == 0
+    pr = read_table(str(rel), "cohort_concord_presence")
+    assert set(pr["layer"]) == {"kraken.genus.mg", "kraken.genus.mt", "prot.genus.intra", "prot.genus.extra"}
+    assert pr["prevalence"].between(0, 1).all() and (pr["samples"] <= pr["of"]).all()
+    m = read_table(str(rel), "cohort_concord_mantel")
+    assert len(m) == 6 and m["r"].between(-1, 1).all() and m["q"].notna().all()
+    al = read_table(str(rel), "cohort_concord_alpha")
+    assert len(al) == 6 and set(al["n"]) == {29, 30}
+    fe = read_table(str(rel), "cohort_concord_features")
+    assert {"Akkermansia"} <= set(fe["feature"]) and fe["rho"].between(-1, 1).all()
+    assert read_manifest(str(rel))["cohort"]["concordance"].startswith("genus=")
+    try:
+        import dash  # noqa: F401
+    except ImportError:
+        return
+    from impexplorer.app import create_app
+    from impexplorer.app.pages import concordance as cp
+    app = create_app(str(rel))
+    d = app._imp_data
+    assert "Concordance" in [p_.name for p_ in app._imp_pages]
+    keys = cp.layers_of(d, "genus")
+    assert keys == ["kraken.genus.mg", "kraken.genus.mt", "prot.genus.intra", "prot.genus.extra"]
+    assert len(cp.upset(d, "genus", keys).data) >= 5
+    assert len(cp.top_features(d, "genus", keys).data) == 1
+    assert len(cp.pair_matrix(d, "cohort_concord_mantel", "r", "genus", keys).data) == 1
+    assert len(cp.sparsity(d, "genus", keys).data) == 2 and len(cp.feature_summary(d, "genus", keys).data) == 2
+    assert cp.layout(d) is not None

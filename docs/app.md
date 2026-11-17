@@ -132,6 +132,14 @@ analysis ([`imp-explorer srna`](srna.md)); the sRNA layers appear next to the IM
 
 ![Cohort](img/cohort.png)
 
+## Concordance
+
+Shown with the results of `imp-explorer cohort --concordance`, per feature set (e.g. genera, Pfam): overlap of the
+layers (UpSet: the most frequent combinations of layers a feature is detected in), the top features by median CLR
+across layers, sparsity (features in every sample, singletons), Spearman ρ of Shannon diversity and Mantel r between
+every two layers, and the share of shared features whose abundances correlate between two layers, with the table of
+one pair.
+
 ## Variance
 
 Shown when the release has the [paper analysis](cohort.md#paper-analysis-paper-model) of `imp-explorer cohort
