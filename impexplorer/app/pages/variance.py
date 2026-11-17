@@ -14,6 +14,8 @@ MEASURES = [("r2_beta", "beta diversity (PERMANOVA R²)", "p_beta"),
             ("r2_shannon", "Shannon diversity (ANOVA r²)", "p_shannon"),
             ("r2_features_median", "features (median r² per feature)", None),
             ("features_q", "features with q < threshold (share)", None)]
+KIND_COLOR = {"taxa": "#8f5aa8", "mags": "#d1495b", "functions": "#2a6f97", "prot": "#66a182",
+              "metab": "#edae49", "ratio": "#7b8794"}
 KINDS = [("taxa", "taxa"), ("mags", "MAGs"), ("functions", "functions"), ("prot", "proteins"),
          ("metab", "metabolites"), ("ratio", "mt/mg ratios")]
 
@@ -60,7 +62,7 @@ def heatmap(data, v, measure, terms_):
         row = []
         for t in terms_:
             x = Z.at[ly, t]
-            s = "" if pd.isna(x) else "%.1f" % (100 * x)
+            s = "–" if pd.isna(x) else "%.1f" % (100 * x)       # – : term not in the layer's model
             if P is not None and not pd.isna(P.at[ly, t]):
                 s += "*" if P.at[ly, t] < 0.05 else ""
             row.append(s)
@@ -85,7 +87,7 @@ def ranking(v, measure, terms_):
     med = d.groupby("term")[mcol].median().sort_values(ascending=False)
     fig = go.Figure()
     kinds = sorted(d["kind"].unique())
-    col = {k: PALETTE[i % len(PALETTE)] for i, k in enumerate(kinds)}
+    col = {k: KIND_COLOR.get(k, PALETTE[i % len(PALETTE)]) for i, k in enumerate(kinds)}
     for k in kinds:
         x = d[d["kind"] == k]
         fig.add_trace(go.Box(x=x["term"], y=100 * x[mcol], name=dict(KINDS).get(k, k), boxpoints="all", jitter=0.5,
@@ -114,7 +116,7 @@ def unexplained(data, v, measure):
     fig = go.Figure(go.Bar(x=100 * d[mcol], y=[layer_label(data, x) for x in d["layer"]], orientation="h",
                            marker_color="#9aa5b1", text=["%.0f %%" % (100 * x) for x in d[mcol]],
                            textposition="outside", hovertemplate="%{y}: %{x:.1f} %<extra></extra>"))
-    fig.update_xaxes(title="% unexplained (residual)", range=[0, 105])
+    fig.update_xaxes(title="% unexplained (residual)", range=[0, 118], tickvals=[0, 25, 50, 75, 100])
     fig.update_yaxes(tickfont=dict(size=10))
     style(fig, 120 + 20 * len(d), legend=False)
     fig.update_layout(margin=dict(l=300, r=40, t=30, b=40))
@@ -126,7 +128,7 @@ def sig_features(data, layer, term, sig_q):
     s = data.q("SELECT term, avg(CASE WHEN p < 0.05 THEN 1.0 ELSE 0 END) AS p05, "
                "avg(CASE WHEN q < ? THEN 1.0 ELSE 0 END) AS q_sig, count(*) AS n FROM cohort_paper_anova "
                "WHERE layer = ? AND analysis = 'feature' AND term <> '(residual)' GROUP BY term", [sig_q, layer])
-    hits = data.q("SELECT feature, n, df, r2, F, p, q FROM cohort_paper_anova WHERE layer = ? AND "
+    hits = data.q("SELECT feature, r2, F, p, q, n FROM cohort_paper_anova WHERE layer = ? AND "
                   "analysis = 'feature' AND term = ? ORDER BY p LIMIT 500", [layer, term]) if term else None
     return s, hits
 
@@ -150,7 +152,8 @@ def layout(data):
                                        have_k, multi=True))], className="controls"),
         card("Variance explained per layer and term", graph("va-heat"),
              note="% of the variance explained by each term given all others; * p < 0.05 (beta diversity, "
-                  "Shannon). Correlated terms share variance that neither gets."),
+                  "Shannon); – term not in that layer's model (depth: count and protein layers only). Correlated "
+                  "terms share variance that neither gets."),
         html.Div([card("Terms across layers", graph("va-rank"), note="each point a layer; terms sorted by the "
                        "median"),
                   card("Unexplained variance", graph("va-resid"), note="residual share per layer (for the feature "
