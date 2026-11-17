@@ -178,6 +178,38 @@ A fit is skipped if it has fewer than 20 samples, fewer than 3 samples in a leve
 BH-FDR is per model, layer and term. The models are the `M1 … Mn` of the sRNA-IMP cohort analysis when its config is
 used.
 
+### Paper analysis (`--paper-model`)
+
+A second analysis that follows a paper's Methods: one multivariable linear model per layer, with the same formula
+for every layer. It runs next to the default analysis and does not change it.
+
+```bash
+imp-explorer cohort --data release_v0.4 \
+    --paper-model "group+stool_consistency+laxative+age+BMI+sex+diet+bacterial_count+spikes+depth"
+```
+
+| part | what | response / distance |
+|---|---|---|
+| alpha | Shannon and Pielou of the layer ~ model, ANOVA per term | count and protein layers |
+| features | each tested feature ~ model, ANOVA per term, BH per layer and term | count layers: relative abundance (`--paper-transform tss`, default) or CLR (`clr`); proteins and metabolomics: CLR, pseudocount = smallest positive value |
+| beta | PERMANOVA with all terms, marginal sums of squares per term (as `adonis2(by = "margin")`), samples permuted | count layers: Bray–Curtis; proteins and metabolomics: Euclidean distance of CLR values (Aitchison) |
+
+- **ANOVA**: sums of squares of each term given all the others (type II). With main effects only, as here, type II
+  and type III give the same values. F test on the residual degrees of freedom; `r2` = SS(term) / SS(total), the
+  share of the variance explained by the term. Terms that are correlated share variance, so the r2 of the terms
+  need not add up to 1 − r2 of the residual.
+- **`depth`**: log10 of the total reads (proteins: AUC) of the sample in that layer, as the paper's sequencing-depth
+  covariate. Other terms are metadata columns or sample metrics; samples with a missing value in a term are left
+  out of that layer (complete cases), at least 20 samples per layer.
+- **Samples**: per layer, those flagged FAIL in [`sample_qc`](sample-qc.md) are left out (`--paper-qc WARN`: also
+  WARN; `none`: no layer QC).
+- Settings file keys: `paper_model`, `paper_transform`, `paper_qc`.
+
+Release tables: `cohort_paper_anova` (layer, analysis = shannon / pielou / feature, feature, term, n, df, ss, r2, F,
+p, q), `cohort_paper_permanova` (layer, term, n, distance, df, ss, r2, F, p, q) and `cohort_paper_variance` (per layer
+and term: r2 and p of Shannon and of the PERMANOVA, median r2 over the features, share of features with q <
+`--sig-q`); the same as `stats/cohort.paper_*.tsv`.
+
 ## Output
 
 ```text

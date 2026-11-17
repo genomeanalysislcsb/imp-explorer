@@ -753,3 +753,59 @@ def test_sample_qc(tmp_path):
     assert len(fig.data) == 1 and len(flagged) == 5           # S02 in its 4 layers, S01 in mt
     for p in app._imp_pages:
         assert p.layout(d) is not None
+
+
+def test_paper_model(tmp_path):
+    """cohort --paper-model: ANOVA per term (= Wald F), variance explained, marginal PERMANOVA, per-layer QC"""
+    import numpy as np
+    from impexplorer import cohort, proteomics, sampleqc
+    from impexplorer.cohort.paper import anova, permanova_margin
+    from impexplorer.cohort.stats import design_matrix
+    rng = np.random.default_rng(3)
+    n = 40
+    g = rng.choice(["A", "B", "C"], n)
+    age = rng.normal(60, 8, n)
+    y = rng.normal(size=n) + (g == "B") * 0.8 + 0.05 * age
+    rows = [{"g": str(a_), "age": repr(float(b_))} for a_, b_ in zip(g, age)]
+    X, _, owner, _ = design_matrix(rows, ["g", "age"], {"g": "categorical", "age": "numeric"}, {"g": "A"})
+    tt, (dfr, ssr), sst = anova(X, owner, y[:, None])
+    B = np.linalg.lstsq(X, y, rcond=None)[0]
+    V = ssr[0] / dfr * np.linalg.inv(X.T @ X)
+    idx = [j for j, o in enumerate(owner) if o == "g"]
+    wald = B[idx] @ np.linalg.solve(V[np.ix_(idx, idx)], B[idx]) / 2
+    assert abs((tt["g"][1][0] / 2) / (ssr[0] / dfr) - wald) < 1e-8
+    out, _, _ = permanova_margin(np.abs(y[:, None] - y[None, :]), X, owner, 49)   # Euclidean on y = ANOVA
+    assert abs(out[0][4] - wald) < 1e-8
+    # on a release
+    root = make_fixture.main(str(tmp_path), n=30)
+    rel = tmp_path / "release"
+    export.main(["--imp-root", root, "--metadata", str(tmp_path / "metadata.tsv"), "--out", str(rel), "--threads", "2"])
+    meta = pd.read_csv(tmp_path / "metadata.tsv", sep="\t")
+    make_prot_tables(str(tmp_path / "prot"), meta)
+    proteomics.main(["--data", str(rel), "--prot", str(tmp_path / "prot"), "--id-case", "upper"])
+    flags = tmp_path / "flags.tsv"
+    pd.DataFrame({"sample_id": ["S01", "S02"], "layer": ["mt", "mp_intra"], "status": ["FAIL", "FAIL"],
+                  "reason": ["x", "y"]}).to_csv(flags, sep="\t", index=False)
+    sampleqc.main(["--data", str(rel), "--flags", str(flags)])
+    rc = cohort.main(["--data", str(rel), "--group-order", "control,case_a,case_b", "--permutations", "49",
+                      "--no-report", "--layers", "kraken.genus.mg,kraken.genus.mt,kegg_module.mg,prot.genus.intra",
+                      "--paper-model", "group+site+age+sex+depth"])
+    assert rc == 0
+    A = read_table(str(rel), "cohort_paper_anova")
+    P = read_table(str(rel), "cohort_paper_permanova")
+    Vt = read_table(str(rel), "cohort_paper_variance")
+    assert {"kraken.genus.mg", "kraken.genus.mt", "kegg_module.mg", "prot.genus.intra"} <= set(A["layer"])
+    assert {"shannon", "pielou", "feature"} <= set(A["analysis"])
+    assert {"group", "site", "age", "sex", "depth", "(residual)"} <= set(A["term"])
+    n_of = A.groupby("layer")["n"].max()
+    assert n_of["kraken.genus.mg"] == 30 and n_of["kraken.genus.mt"] == 29 and n_of["prot.genus.intra"] == 29
+    f = A[(A["layer"] == "kraken.genus.mg") & (A["analysis"] == "feature")]
+    assert f["r2"].between(0, 1).all() and len(f["feature"].unique()) == 10
+    assert f[f["term"] != "(residual)"]["q"].notna().all() and f[f["term"] == "(residual)"]["p"].isna().all()
+    p = P[P["layer"] == "kraken.genus.mg"].set_index("term")
+    assert p.loc["group", "distance"] == "Bray-Curtis" and 0 < p.loc["group", "r2"] < 1
+    assert P[P["layer"] == "prot.genus.intra"]["distance"].iloc[0] == "Euclidean (CLR)"
+    v = Vt[Vt["layer"] == "kraken.genus.mg"].set_index("term")
+    assert list(Vt[Vt["layer"] == "kraken.genus.mg"]["term"])[:5] == ["group", "site", "age", "sex", "depth"]
+    assert v.loc["(residual)", "r2_beta"] > 0.3
+    assert read_manifest(str(rel))["cohort"]["paper"]["model"] == "group+site+age+sex+depth"

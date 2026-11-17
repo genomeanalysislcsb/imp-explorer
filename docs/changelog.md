@@ -7,6 +7,10 @@
   flags file (e.g. a paper's exclusions with their reasons). The app has a QC switch in the top bar (all samples /
   without FAIL / PASS only) that every page applies per layer, and the Overview shows the sample x layer grid and
   the flagged samples.
+- **Paper analysis** (`imp-explorer cohort --paper-model`): one multivariable linear model per layer as in a paper's
+  Methods, next to the default analysis: type II ANOVA per term for Shannon, Pielou and every feature, variance
+  explained per term, PERMANOVA with all terms (marginal R², Bray–Curtis or Euclidean on CLR), the layer's flagged
+  samples left out (`sample_qc`). Tables `cohort_paper_anova`, `cohort_paper_permanova`, `cohort_paper_variance`.
 
 ## 0.3.0 (2026-11)
 

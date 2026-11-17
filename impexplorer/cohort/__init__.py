@@ -23,7 +23,9 @@ RELEASE_TABLES = {   # cohort result -> release table read by the app
     "models": "cohort_models", "models_overview": "cohort_models_overview", "feature_tests": "cohort_tests",
     "metrics_tests": "cohort_metric_tests", "permanova": "cohort_permanova", "dispersion": "cohort_dispersion",
     "ordination": "cohort_ordination", "sample_metrics": "cohort_samples", "covariates": "cohort_covariates",
-    "qc_flags": "cohort_qc", "mag_prevalence": "cohort_mag_prevalence"}
+    "qc_flags": "cohort_qc", "mag_prevalence": "cohort_mag_prevalence",
+    "paper_anova": "cohort_paper_anova", "paper_permanova": "cohort_paper_permanova",
+    "paper_variance": "cohort_paper_variance"}
 
 
 def write_outputs(C, A, res, a):
@@ -57,6 +59,8 @@ def settings_dict(C, A, a):
             "metrics": {m: METRIC_LABEL.get(m, m) for m in C.metric_names},
             "permutations": a.permutations, "sig_q": a.sig_q, "prevalence": a.prevalence, "qc_drop": a.qc_drop,
             "nmds": a.nmds, "nmds_starts": getattr(a, "nmds_starts", None),
+            "paper": {"model": a.paper_model, "transform": a.paper_transform, "qc": a.paper_qc}
+            if a.paper_model else {},
             "samples": len(C.samples), "kept": len(C.kept), "excluded": C.excluded,
             "config": os.path.abspath(a.config) if a.config else "", "from_config": a.from_config, "notes": C.log}
 
@@ -84,6 +88,9 @@ def main(argv=None):
     C.note("layers: " + ", ".join("%s (%d x %d)" % (k, L.M.shape[0], L.M.shape[1]) for k, L in C.layers.items()))
     A = Analysis(C)
     res = A.run()
+    if a.paper_model:
+        from .paper import run as run_paper
+        res.update(run_paper(C, a))
     write_outputs(C, A, res, a)
     st = settings_dict(C, A, a)
     with open(os.path.join(a.out, "cohort.settings.json"), "w") as fh:
