@@ -11,6 +11,8 @@
   Methods, next to the default analysis: type II ANOVA per term for Shannon, Pielou and every feature, variance
   explained per term, PERMANOVA with all terms (marginal R², Bray–Curtis or Euclidean on CLR), the layer's flagged
   samples left out (`sample_qc`). Tables `cohort_paper_anova`, `cohort_paper_permanova`, `cohort_paper_variance`.
+- **Variance page** (app): variance explained per layer and term (beta diversity, Shannon, features), terms ranked
+  across layers, unexplained variance per layer, significant features per term.
 
 ## 0.3.0 (2026-11)
 

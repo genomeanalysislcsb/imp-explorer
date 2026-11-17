@@ -132,6 +132,24 @@ analysis ([`imp-explorer srna`](srna.md)); the sRNA layers appear next to the IM
 
 ![Cohort](img/cohort.png)
 
+## Variance
+
+Shown when the release has the [paper analysis](cohort.md#paper-analysis-paper-model) of `imp-explorer cohort
+--paper-model`, as in Fig. 4 of a paper that partitions variance by covariate:
+
+- **Variance explained per layer and term**: heatmap of the % of variance each term explains given the others, for
+  the measure chosen (beta diversity: PERMANOVA R²; Shannon; median r² over the features; share of features with
+  q below the threshold); `*` p < 0.05.
+- **Terms across layers**: every layer as a point per term, terms sorted by their median over layers.
+- **Unexplained variance**: the residual share per layer.
+- **Features per term**: share of a layer's features with p < 0.05 and with q below the threshold, per term, and the
+  features of one term sorted by p.
+
+The layer selector keeps taxa, MAGs, functions, proteins or metabolites. The page shows the precomputed results of
+the paper analysis; the QC switch does not change them.
+
+![Variance](img/variance.png)
+
 ## Statistics: what they are and are not
 
 The tests of the other pages are exploratory: one non-parametric test per feature with BH correction, no covariates,

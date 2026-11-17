@@ -809,3 +809,21 @@ def test_paper_model(tmp_path):
     assert list(Vt[Vt["layer"] == "kraken.genus.mg"]["term"])[:5] == ["group", "site", "age", "sex", "depth"]
     assert v.loc["(residual)", "r2_beta"] > 0.3
     assert read_manifest(str(rel))["cohort"]["paper"]["model"] == "group+site+age+sex+depth"
+    try:
+        import dash  # noqa: F401
+    except ImportError:
+        return
+    from impexplorer.app import create_app
+    from impexplorer.app.pages import variance
+    app = create_app(str(rel))
+    d = app._imp_data
+    assert "Variance" in [p_.name for p_ in app._imp_pages]
+    assert variance.terms(d) == ["group", "site", "age", "sex", "depth"]
+    vt = variance.table(d, [])
+    for m, _, _ in variance.MEASURES:
+        assert len(variance.heatmap(d, vt, m, variance.terms(d)).data) == 1
+        assert len(variance.ranking(vt, m, variance.terms(d)).data) >= 2
+    assert len(variance.unexplained(d, vt, "r2_beta").data[0].x) == 4
+    s_, hits = variance.sig_features(d, "kraken.genus.mg", "group", 0.1)
+    assert set(s_["term"]) == {"group", "site", "age", "sex", "depth"} and len(hits) == 10
+    assert variance.layout(d) is not None
