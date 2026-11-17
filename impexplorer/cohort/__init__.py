@@ -27,7 +27,7 @@ RELEASE_TABLES = {   # cohort result -> release table read by the app
     "paper_anova": "cohort_paper_anova", "paper_permanova": "cohort_paper_permanova",
     "paper_variance": "cohort_paper_variance", "concord_presence": "cohort_concord_presence",
     "concord_alpha": "cohort_concord_alpha", "concord_mantel": "cohort_concord_mantel",
-    "concord_features": "cohort_concord_features"}
+    "concord_features": "cohort_concord_features", "concord_within": "cohort_concord_within"}
 
 
 def write_outputs(C, A, res, a):

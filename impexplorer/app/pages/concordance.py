@@ -149,6 +149,29 @@ def feature_summary(data, s, keys, q=0.05):
     return fig
 
 
+def within_fig(data, s):
+    """per pair of layers: Spearman of the two profiles of the same sample, against the median with the other
+    samples (individuality)"""
+    d = data.q("SELECT layer_a, layer_b, sample_id, n_features, rho, rho_others FROM cohort_concord_within "
+               "WHERE \"set\" = ?", [s])
+    if d.empty:
+        return empty_fig("no shared samples / features")
+    d["pair"] = [short(data, a) + " · " + short(data, b) for a, b in zip(d["layer_a"], d["layer_b"])]
+    order = list(d.groupby("pair")["rho"].median().sort_values(ascending=False).index)
+    fig = go.Figure()
+    for col, name, color in (("rho", "same sample", "#2a6f97"), ("rho_others", "other samples (median)", "#9aa5b1")):
+        fig.add_trace(go.Box(x=d[col], y=d["pair"], name=name, orientation="h", boxpoints="all", jitter=0.4,
+                             pointpos=0, marker=dict(size=3, color=color, opacity=0.6), line=dict(color=color),
+                             fillcolor="rgba(0,0,0,0)", text=d["sample_id"],
+                             hovertemplate="%{text}: ρ = %{x:.2f}<extra>" + name + "</extra>"))
+    fig.update_layout(boxmode="group")
+    fig.update_yaxes(categoryorder="array", categoryarray=order[::-1])
+    fig.update_xaxes(title="Spearman ρ of the profiles", range=[-0.2, 1])
+    style(fig, 160 + 46 * len(order))
+    fig.update_layout(margin=dict(l=320, r=20, t=20, b=40))
+    return fig
+
+
 def layout(data):
     sets = data.distinct("cohort_concord_presence", '"set"')
     s0 = sets[0] if sets else None
@@ -174,6 +197,10 @@ def layout(data):
                   card("Same feature in two layers", graph("cc-feat"),
                        note="share of the shared features with a significant Spearman correlation")],
                  className="grid g2"),
+        card("Within each sample", graph("cc-within"),
+             note="Spearman ρ of the two profiles of the same sample over their shared features (blue), and of its "
+                  "profile with the other samples' profiles in the other layer (grey, median): blue above grey = "
+                  "the layers keep the individual's signature"),
         card("Features of one pair of layers", html.Div([
             html.Div([control("layers", dd("cc-pair", pairs, pairs[0]["value"] if pairs else None))],
                      className="controls"),
@@ -184,10 +211,10 @@ def layout(data):
 def register(app, data):
     @app.callback(Output("cc-upset", "figure"), Output("cc-top", "figure"), Output("cc-alpha", "figure"),
                   Output("cc-mantel", "figure"), Output("cc-sparse", "figure"), Output("cc-feat", "figure"),
-                  Output("cc-pair", "options"), Input("cc-set", "value"))
+                  Output("cc-pair", "options"), Output("cc-within", "figure"), Input("cc-set", "value"))
     def _set(s):
         if not s:
-            return (empty_fig(),) * 6 + ([],)
+            return (empty_fig(),) * 6 + ([], empty_fig())
         keys = layers_of(data, s)
         pairs = [{"label": "%s · %s" % (short(data, a), short(data, b)), "value": "%s|%s" % (a, b)}
                  for a, b in itertools.combinations(keys, 2)]
@@ -197,7 +224,8 @@ def register(app, data):
                 pair_matrix(data, "cohort_concord_mantel", "r", s, keys) if data.has("cohort_concord_mantel")
                 else empty_fig(),
                 sparsity(data, s, keys),
-                feature_summary(data, s, keys) if data.has("cohort_concord_features") else empty_fig(), pairs)
+                feature_summary(data, s, keys) if data.has("cohort_concord_features") else empty_fig(), pairs,
+                within_fig(data, s) if data.has("cohort_concord_within") else empty_fig())
 
     @app.callback(Output("cc-feat-table", "children"), Input("cc-pair", "value"), Input("cc-set", "value"))
     def _pair(pair, s):

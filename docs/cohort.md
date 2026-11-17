@@ -230,6 +230,7 @@ imp-explorer cohort --data release_v0.4 \
 | `cohort_concord_alpha` | Spearman ρ of Shannon diversity between every two layers |
 | `cohort_concord_mantel` | Mantel test between every two layers: Pearson r of the Bray–Curtis distances, samples permuted (`--permutations`), one-sided p |
 | `cohort_concord_features` | Spearman ρ of each feature between two layers (detected in ≥ `--prevalence` of the shared samples in both) |
+| `cohort_concord_within` | per sample and pair of layers: Spearman ρ of its two profiles over the shared features, and the median ρ of its profile with the other samples' profiles in the other layer (individuality) |
 
 BH-FDR over the pairs of a set (alpha, Mantel) and per pair (features). The app shows them on the Concordance page.
 Feature names must match between layers (GTDB genus names, Pfam accessions).

@@ -16,6 +16,9 @@ Per set, on the samples two layers share (samples flagged FAIL in a layer's samp
   mantel     Mantel test (Pearson correlation of the Bray-Curtis distances, samples permuted) between every two layers
   features   Spearman correlation of the same feature between every two layers (features detected in >= --prevalence of
              the shared samples in both)
+  within     per sample, Spearman correlation of its two profiles over the same features (how similar one person's
+             layers are), and the median correlation of its profile in one layer with the other samples' profiles
+             in the other layer (individuality: own > others)
 BH-FDR over the pairs of a set (alpha, mantel) and per pair (features).
 """
 import numpy as np
@@ -137,9 +140,33 @@ def feature_cor(A, B, prevalence):
     return pd.DataFrame({"feature": keep, "n": n, "rho": rho, "p": t_p(T, n - 2)})
 
 
+def within(A, B, prevalence):
+    """per shared sample: Spearman of the two profiles over the features detected in >= prevalence of the shared
+    samples in both layers; and the median Spearman with the other samples' profiles of layer B"""
+    ss = sorted(set(A.index) & set(B.index))
+    f = sorted(set(A.columns) & set(B.columns))
+    if len(ss) < MIN_SHARED or len(f) < 5:
+        return pd.DataFrame(columns=["sample_id", "n_features", "rho", "rho_others"])
+    X, Y = rel(A.loc[ss])[f], rel(B.loc[ss])[f]
+    keep = [c for c in f if (X[c] > 0).mean() >= prevalence and (Y[c] > 0).mean() >= prevalence]
+    if len(keep) < 5:
+        return pd.DataFrame(columns=["sample_id", "n_features", "rho", "rho_others"])
+    RX = np.apply_along_axis(rankdata, 1, X[keep].values)
+    RY = np.apply_along_axis(rankdata, 1, Y[keep].values)
+    z = lambda R: (R - R.mean(axis=1, keepdims=True)) / np.where(R.std(axis=1, keepdims=True) > 0,
+                                                                 R.std(axis=1, keepdims=True), np.nan)
+    Cm = z(RX) @ z(RY).T / len(keep)                       # samples x samples: Spearman of profile a(s) vs b(t)
+    own = np.diag(Cm).copy()
+    off = Cm.copy()
+    np.fill_diagonal(off, np.nan)
+    with np.errstate(all="ignore"):
+        others = np.nanmedian(off, axis=1)
+    return pd.DataFrame({"sample_id": ss, "n_features": len(keep), "rho": own, "rho_others": others})
+
+
 def run(C, a):
     sets = parse(a.concordance)
-    pres, alpha, man, feat = [], [], [], []
+    pres, alpha, man, feat, wit = [], [], [], [], []
     for name, keys in sets.items():
         Ms = matrices(C, a, keys)
         if len(Ms) < 2:
@@ -170,6 +197,12 @@ def run(C, a):
                 D1, D2 = bray_curtis(rel(Ms[k1].loc[ss]).values), bray_curtis(rel(Ms[k2].loc[ss]).values)
                 r, p = mantel(D1, D2, a.permutations)
                 rows_m.append([name, k1, k2, len(ss), r, p])
+                w = within(Ms[k1], Ms[k2], a.prevalence)
+                if len(w):
+                    w.insert(0, "layer_b", k2)
+                    w.insert(0, "layer_a", k1)
+                    w.insert(0, "set", name)
+                    wit.append(w)
                 fc = feature_cor(Ms[k1], Ms[k2], a.prevalence)
                 if len(fc):
                     fc.insert(0, "layer_b", k2)
@@ -185,4 +218,5 @@ def run(C, a):
     return {"concord_presence": pd.concat(pres, ignore_index=True) if pres else pd.DataFrame(),
             "concord_alpha": pd.DataFrame(alpha, columns=cols + ["rho", "p", "q"]),
             "concord_mantel": pd.DataFrame(man, columns=cols + ["r", "p", "q"]),
-            "concord_features": pd.concat(feat, ignore_index=True) if feat else pd.DataFrame()}
+            "concord_features": pd.concat(feat, ignore_index=True) if feat else pd.DataFrame(),
+            "concord_within": pd.concat(wit, ignore_index=True) if wit else pd.DataFrame()}

@@ -864,6 +864,12 @@ def test_concordance(tmp_path):
     fe = read_table(str(rel), "cohort_concord_features")
     assert {"Akkermansia"} <= set(fe["feature"]) and fe["rho"].between(-1, 1).all()
     assert read_manifest(str(rel))["cohort"]["concordance"].startswith("genus=")
+    w = read_table(str(rel), "cohort_concord_within")
+    assert len(w) and w["rho"].between(-1, 1).all() and set(w["layer_a"]) <= set(m["layer_a"])
+    from impexplorer.cohort.concord import within
+    P = pd.DataFrame(rng.random((20, 8)), columns=list("abcdefgh"))
+    wv = within(P, P, 0.1)
+    assert np.allclose(wv["rho"], 1) and (wv["rho_others"] < 1).all()
     try:
         import dash  # noqa: F401
     except ImportError:
@@ -878,6 +884,7 @@ def test_concordance(tmp_path):
     assert len(cp.upset(d, "genus", keys).data) >= 5
     assert len(cp.top_features(d, "genus", keys).data) == 1
     assert len(cp.pair_matrix(d, "cohort_concord_mantel", "r", "genus", keys).data) == 1
+    assert len(cp.within_fig(d, "genus").data) == 2
     assert len(cp.sparsity(d, "genus", keys).data) == 2 and len(cp.feature_summary(d, "genus", keys).data) == 2
     assert cp.layout(d) is not None
 

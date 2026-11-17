@@ -16,7 +16,8 @@
   (`mt_ext_remap`: functions); QC layers, default cohort layers and concordance sets include them.
 - **Agreement between layers** (`imp-explorer cohort --concordance`): overlap and sparsity of the features, top
   features by median CLR, Spearman of Shannon diversity, Mantel tests and per-feature Spearman between every two
-  layers of a set (e.g. genera in mg, mt, proteins and sRNA; Pfam in mg, mt and proteins); Concordance page.
+  layers of a set (e.g. genera in mg, mt, proteins and sRNA; Pfam in mg, mt and proteins), and within each sample
+  (profiles of the same sample vs other samples: individuality); Concordance page.
 - **Variance page** (app): variance explained per layer and term (beta diversity, Shannon, features), terms ranked
   across layers, unexplained variance per layer, significant features per term.
 
