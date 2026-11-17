@@ -37,13 +37,16 @@ The flags are collected in this order:
 2. **srna**: the QC verdict of sRNA-IMP for each library (PASS, WARN, FAIL with its rules).
 3. **manual**: `--flags FILE`, a TSV or CSV with the columns `sample_id`, `layer`, `status`, `reason`. A manual row
    replaces the automatic status of that sample and layer, so it can also clear a flag with PASS. `layer` `*` means
-   every layer of that sample. A sample without data in a layer stays `missing`.
+   every layer of that sample, `sample_id` `*` every sample in that layer (a row for one sample overrides it). A
+   sample without data in a layer stays `missing`.
 
 ```text
 sample_id	layer	status	reason
 KPL16	metab.bile_acids	FAIL	measured twice, labels to confirm
 BRC27	*	WARN	outlier in the paper's QC
 BHC22	mt	FAIL	RNA quality too low (paper)
+*	mt_ext_remap	FAIL	extracellular mt: single-end, too shallow to use
+*	mt_ext	FAIL	extracellular mt: single-end, too shallow to use
 ```
 
 Use the manual file for the exclusions of a paper, with the paper's reasons, so the explorer and the paper agree.

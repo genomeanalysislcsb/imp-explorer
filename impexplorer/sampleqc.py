@@ -8,7 +8,8 @@ the sRNA-IMP fractions (e.g. srna_int, srna_ext), the protein fractions
   auto     rules on the release itself: no data in a layer -> missing; mg / mt read pairs after trimming below
            --min-mg-pairs / --min-mt-pairs -> FAIL; outliers flagged by 'imp-explorer cohort' (cohort_qc) -> WARN
   srna     the QC verdict of sRNA-IMP per library (PASS / WARN / FAIL, with its rules)
-  manual   --flags FILE: sample_id, layer, status, reason (TSV/CSV). layer '*' = every layer of that sample; a manual
+  manual   --flags FILE: sample_id, layer, status, reason (TSV/CSV). layer '*' = every layer of that sample, sample_id
+           '*' = every sample in that layer (e.g. '*  mt_ext_remap  FAIL  not usable'); a manual
            row replaces the automatic status of that sample and layer (e.g. the exclusions of a paper, or PASS to
            clear an automatic flag)
 
@@ -89,6 +90,16 @@ def read_flags(path):
     return f
 
 
+def _manual(cells, sid, layer, r):
+    """a manual flag replaces the automatic status of a sample and layer (no data stays missing)"""
+    c = cells.setdefault((sid, layer), ["PASS", [], []])
+    if c[0] == "missing" and r["status"] != "missing":
+        return
+    c[0] = r["status"]
+    c[1] = [x for x in [r["reason"] or "manual %s" % r["status"]] + c[1] if x]
+    c[2] = ["manual"] + [x for x in c[2] if x != "manual"]
+
+
 def build(release, flags=None, min_mg_pairs=1e6, min_mt_pairs=1e6):
     """DataFrame sample_qc (sample_id, layer, status, reasons, source) and a list of notes"""
     notes = []
@@ -142,7 +153,7 @@ def build(release, flags=None, min_mg_pairs=1e6, min_mt_pairs=1e6):
     # manual flags replace the automatic status
     if flags:
         f = read_flags(flags)
-        unknown_s = sorted(set(f["sample_id"]) - set(ids))
+        unknown_s = sorted(set(f["sample_id"]) - set(ids) - {"*"})
         unknown_l = sorted(set(f["layer"]) - set(have) - {"*"})
         if unknown_s:
             notes.append("%d manual flags for samples not in the release (ignored): %s"
@@ -150,18 +161,16 @@ def build(release, flags=None, min_mg_pairs=1e6, min_mt_pairs=1e6):
         if unknown_l:
             notes.append("manual flags for unknown layers (ignored): %s; layers: %s"
                          % (", ".join(unknown_l), ", ".join(sorted(have))))
+        f = pd.concat([f[f["sample_id"] == "*"], f[f["sample_id"] != "*"]])      # single samples override '*'
         for _, r in f.iterrows():
-            if r["sample_id"] not in ids:
-                continue
-            for layer in (sorted(have) if r["layer"] == "*" else [r["layer"]]):
-                if layer not in have:
+            sids = ids if r["sample_id"] == "*" else [r["sample_id"]]
+            for sid in sids:
+                if sid not in ids:
                     continue
-                c = cells.setdefault((r["sample_id"], layer), ["PASS", [], []])
-                if c[0] == "missing" and r["status"] != "missing":
-                    continue                                   # no data stays missing
-                c[0] = r["status"]
-                c[1] = [x for x in [r["reason"] or "manual %s" % r["status"]] + c[1] if x]
-                c[2] = ["manual"] + [x for x in c[2] if x != "manual"]
+                for layer in (sorted(have) if r["layer"] == "*" else [r["layer"]]):
+                    if layer not in have:
+                        continue
+                    _manual(cells, sid, layer, r)
     rows = [{"sample_id": sid, "layer": layer, "status": c[0], "reasons": "; ".join(dict.fromkeys(c[1])),
              "source": ", ".join(c[2])} for (sid, layer), c in sorted(cells.items(), key=lambda kv: (kv[0][1], kv[0][0]))]
     return pd.DataFrame(rows, columns=["sample_id", "layer", "status", "reasons", "source"]), notes

@@ -23,7 +23,7 @@ ALIASES = {"match_col": "block", "group": "group_col", "groups": "group_order", 
 CONFIG_KEYS = ("metadata", "dictionary", "id_col", "group_col", "group_order", "reference", "block", "covariates", "model",
                "model_notes", "permutations", "sig_q", "outlier_z", "qc_drop", "term_names", "name", "layers",
                "prevalence", "min_mg_pairs", "min_mt_pairs", "nmds", "nmds_starts", "paper_model", "paper_transform",
-               "paper_qc", "concordance")
+               "paper_qc", "concordance", "contig_min_share", "fraction_pairs")
 IGNORED = {"dir", "min_mirna_reads"}       # sRNA-specific COHORT_* keys without meaning here
 
 DEFAULT_LAYERS = ("kraken.genus.mg,kraken.genus.mt,kraken.species.mg,kraken.species.mt,"
@@ -126,6 +126,12 @@ paper_qc: FAIL            # sample_qc flags left out per layer: FAIL | WARN | no
 # agreement between layers (Mantel, alpha and feature correlations, overlap): sets of layers with the same features,
 #   'name=layer,layer; name2=...' or auto (genus: kraken / proteins / sRNA; pfam: mg, mt, proteins)
 concordance:
+# contig taxonomy (MMseqs2): a genus / species counts in a sample only from this share of the sample's reads on;
+#   cuts the long tail of rare genera assigned to single short contigs (0 = keep all)
+contig_min_share: 1e-5
+# intracellular vs extracellular per feature (paired Wilcoxon, rank-biserial effect, BH-FDR): pairs of layers with
+#   the same features, 'a,b; c,d' or auto (mg / mg_ext, proteins intra / extra, sRNA int / ext, ...)
+fraction_pairs:
 """
 
 
@@ -181,6 +187,12 @@ def parser():
     ap.add_argument("--concordance", default=None, help="agreement between layers: 'auto' or sets of layers with "
                     "the same features, 'genus=kraken.genus.mg,kraken.genus.mt,prot.genus.intra,srna.genus.srna_int; "
                     "pfam=pfam.mg,pfam.mt,prot.pfam.intra' (Mantel, Shannon and feature correlations, overlap)  [off]")
+    ap.add_argument("--contig-min-share", type=float, default=None, help="contig taxonomy layers (contig.*): a taxon "
+                    "counts in a sample only from this share of the sample's reads on (rare genera of single short "
+                    "contigs)  [1e-5; 0 = all]")
+    ap.add_argument("--fraction-pairs", default=None, help="intracellular vs extracellular per feature: 'auto' or "
+                    "pairs of layers, 'kraken.genus.mg,kraken.genus.mg_ext; prot.genus.intra,prot.genus.extra' (paired "
+                    "Wilcoxon on CLR, rank-biserial effect, BH-FDR)  [off]")
     ap.add_argument("--term-names", default=None, help="TSV(s) term<TAB>name or KEGG flat files for readable labels")
     ap.add_argument("--name", default=None, help="title of the report  [study name]")
     ap.add_argument("--no-release-tables", action="store_true", help="do not write cohort_* tables into the release")
@@ -195,9 +207,9 @@ DEFAULTS = {"metadata": "", "dictionary": "", "id_col": "", "group_col": "group"
             "qc_drop": "FAIL", "term_names": "", "name": "", "layers": DEFAULT_LAYERS, "prevalence": 0.1,
             "min_mg_pairs": 1e6, "min_mt_pairs": 1e6, "nmds": "kraken.genus.mg,kegg_pathway.mg", "nmds_starts": 5,
             "paper_model": "", "paper_transform": "tss", "paper_qc": "FAIL",
-            "concordance": ""}
+            "concordance": "", "contig_min_share": 1e-5, "fraction_pairs": ""}
 TYPES = {"permutations": int, "nmds_starts": int, "sig_q": float, "outlier_z": float, "prevalence": float, "min_mg_pairs": float,
-         "min_mt_pairs": float}
+         "min_mt_pairs": float, "contig_min_share": float}
 
 
 RANKS = ("phylum", "class", "order", "family", "genus", "species")

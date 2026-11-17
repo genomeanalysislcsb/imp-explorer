@@ -6,7 +6,9 @@ and sRNA, or Pfam domains in mg, mt and the proteins:
 
   --concordance "genus=kraken.genus.mg,kraken.genus.mt,prot.genus.intra,prot.genus.extra,srna.genus.srna_int;
                  pfam=pfam.mg,pfam.mt,prot.pfam.intra,prot.pfam.extra"
-  ('auto' = these two sets with the layers present; srna.<set>.<fraction> = an imported sRNA-IMP profile)
+  ('auto' = these two sets with the layers present, plus the extracellular metagenome (mg_ext) and the contig
+  taxonomy; the extracellular metatranscriptome (mt_ext, mt_ext_remap) is left out; srna.<set>.<fraction> = an
+  imported sRNA-IMP profile)
 
 Per set, on the samples two layers share (samples flagged FAIL in a layer's sample_qc left out, as --paper-qc):
 
@@ -28,10 +30,10 @@ from ..release import read_table, table_path
 from .paper import qc_drop, qc_layer
 from .stats import bh, bray_curtis, clr, rankdata, spearman, t_p
 
-AUTO = {"genus": ["kraken.genus.mg", "kraken.genus.mt", "kraken.genus.mg_ext", "kraken.genus.mt_ext",
+AUTO = {"genus": ["kraken.genus.mg", "kraken.genus.mt", "kraken.genus.mg_ext",
                   "contig.genus.mg", "contig.genus.mg_ext", "prot.genus.intra",
                   "prot.genus.extra", "srna.genus.srna_int", "srna.genus.srna_ext"],
-        "pfam": ["pfam.mg", "pfam.mt", "pfam.mg_ext", "pfam.mt_ext_remap", "prot.pfam.intra", "prot.pfam.extra"]}
+        "pfam": ["pfam.mg", "pfam.mt", "pfam.mg_ext", "prot.pfam.intra", "prot.pfam.extra"]}
 MIN_SHARED = 10
 
 

@@ -59,8 +59,11 @@ def control(label, comp):
 
 def dd(id_, options, value=None, multi=False, clearable=False, placeholder=None):
     opts = [o if isinstance(o, dict) else {"label": str(o), "value": o} for o in options]
+    longest = max([len(str(o.get("label", ""))) for o in opts] or [0])
+    # long labels wrap: taller options so the lines of one option do not run into the next
     return dcc.Dropdown(id=id_, options=opts, value=value, multi=multi, clearable=clearable,
-                        placeholder=placeholder)
+                        placeholder=placeholder, optionHeight=35 if longest <= 40 else 35 + 20 * min(3, longest // 40),
+                        style={"minWidth": "320px"} if longest > 40 else None)
 
 
 def stat_tile(value, label):

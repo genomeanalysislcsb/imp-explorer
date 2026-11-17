@@ -233,7 +233,39 @@ imp-explorer cohort --data release_v0.4 \
 | `cohort_concord_within` | per sample and pair of layers: Spearman ρ of its two profiles over the shared features, and the median ρ of its profile with the other samples' profiles in the other layer (individuality) |
 
 BH-FDR over the pairs of a set (alpha, Mantel) and per pair (features). The app shows them on the Concordance page.
-Feature names must match between layers (GTDB genus names, Pfam accessions).
+Feature names must match between layers (GTDB genus names, Pfam accessions). `auto` adds the extracellular
+metagenome (`mg_ext`) and the contig taxonomy when the release has them; the extracellular metatranscriptome is left out.
+
+### Intracellular vs extracellular (`--fraction-pairs`)
+
+Which taxa and functions are enriched in one fraction of the same samples:
+
+```bash
+imp-explorer cohort --data release_v0.4 --fraction-pairs auto
+imp-explorer cohort --data release_v0.4 \
+    --fraction-pairs "kraken.genus.mg,kraken.genus.mg_ext; prot.genus.intra,prot.genus.extra; srna.genus.srna_int,srna.genus.srna_ext"
+```
+
+`auto` = mg / mg_ext (Kraken and contig genera, KEGG KO and modules, CAZy, Pfam), proteins intra / extra (genera,
+KEGG KO, Pfam) and sRNA-Int / sRNA-Ext, as far as the release has them. Per pair, on the samples with both (FAIL in a
+layer's `sample_qc` left out), the features detected in ≥ `--prevalence` of the samples in either fraction; both
+profiles are closed to these features and CLR-transformed. Per feature a paired Wilcoxon signed-rank test of
+CLR(second) − CLR(first), the matched-pairs rank-biserial correlation r as effect size (−1 every sample higher in the
+first fraction, +1 every sample higher in the second; the paired counterpart of Cliff's delta) and the median log2
+ratio; BH-FDR per pair.
+
+| table | what |
+|---|---|
+| `cohort_fraction_diff` | per pair and feature: n, prevalence and median relative abundance per fraction, median log2 ratio, r, z, p, q |
+| `cohort_fraction_summary` | per pair: samples, features tested, features higher in each fraction (q < `--sig-q`) |
+
+The app shows them on the Intra vs extra page.
+
+### Contig taxonomy layers
+
+`contig.<rank>.<omic>` layers (MMseqs2 LCA of the contigs, `--contig-taxonomy` of export / fraction) have a long tail
+of rare taxa assigned to single short contigs. `--contig-min-share` (default 1e-5) keeps a taxon in a sample only from
+that share of the sample's reads on; the log reports how many taxa each layer keeps. 0 keeps all.
 
 ## Output
 

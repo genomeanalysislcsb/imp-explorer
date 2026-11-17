@@ -27,7 +27,8 @@ RELEASE_TABLES = {   # cohort result -> release table read by the app
     "paper_anova": "cohort_paper_anova", "paper_permanova": "cohort_paper_permanova",
     "paper_variance": "cohort_paper_variance", "concord_presence": "cohort_concord_presence",
     "concord_alpha": "cohort_concord_alpha", "concord_mantel": "cohort_concord_mantel",
-    "concord_features": "cohort_concord_features", "concord_within": "cohort_concord_within"}
+    "concord_features": "cohort_concord_features", "concord_within": "cohort_concord_within",
+    "fraction_diff": "cohort_fraction_diff", "fraction_summary": "cohort_fraction_summary"}
 
 
 def write_outputs(C, A, res, a):
@@ -63,7 +64,8 @@ def settings_dict(C, A, a):
             "nmds": a.nmds, "nmds_starts": getattr(a, "nmds_starts", None),
             "paper": {"model": a.paper_model, "transform": a.paper_transform, "qc": a.paper_qc}
             if a.paper_model else {},
-            "concordance": a.concordance,
+            "concordance": a.concordance, "fraction_pairs": a.fraction_pairs,
+            "contig_min_share": a.contig_min_share,
             "samples": len(C.samples), "kept": len(C.kept), "excluded": C.excluded,
             "config": os.path.abspath(a.config) if a.config else "", "from_config": a.from_config, "notes": C.log}
 
@@ -109,6 +111,12 @@ def main(argv=None):
         extra = [k for k in needed_layers(parse(a.concordance)) if k not in have]
         if extra:
             a.layers += "," + ",".join(extra)
+    if a.fraction_pairs:                      # the layers the intra / extra pairs need
+        from .fracdiff import needed_layers as fr_needed, parse as fr_parse
+        have = [k.strip() for k in C.expand_metab(a.layers).split(",")]
+        extra = [k for k in fr_needed(fr_parse(a.fraction_pairs)) if k not in have]
+        if extra:
+            a.layers += "," + ",".join(dict.fromkeys(extra))
     C.load_layers(a.layers)
     C.note("layers: " + ", ".join("%s (%d x %d)" % (k, L.M.shape[0], L.M.shape[1]) for k, L in C.layers.items()))
     A = Analysis(C)
@@ -119,6 +127,9 @@ def main(argv=None):
     if a.concordance:
         from .concord import run as run_concord
         res.update(run_concord(C, a))
+    if a.fraction_pairs:
+        from .fracdiff import run as run_fracdiff
+        res.update(run_fracdiff(C, a))
     write_outputs(C, A, res, a)
     st = settings_dict(C, A, a)
     with open(os.path.join(a.out, "cohort.settings.json"), "w") as fh:

@@ -56,8 +56,9 @@ def pair_matrix(data, table, col, s, keys):
     fig = go.Figure(go.Heatmap(z=Z, x=labs, y=labs, text=T, texttemplate="%{text}", zmin=-1, zmax=1,
                                colorscale="RdBu", reversescale=True, colorbar=dict(thickness=12),
                                hovertemplate="%{y} · %{x}: %{z:.3f}<extra></extra>"))
-    fig.update_yaxes(autorange="reversed")
-    style(fig, 160 + 34 * n, legend=False)
+    fig.update_yaxes(autorange="reversed", dtick=1, automargin=True)
+    fig.update_xaxes(dtick=1, tickangle=-45, automargin=True)
+    style(fig, 200 + 34 * n, legend=False)
     fig.update_layout(margin=dict(l=200, r=20, t=20, b=140))
     return fig
 
@@ -95,16 +96,24 @@ def upset(data, s, keys, min_samples=2, top=15):
 
 
 def top_features(data, s, keys, top=TOP):
-    p = data.q("SELECT layer, feature, median_clr, prevalence FROM cohort_concord_presence WHERE \"set\" = ?", [s])
+    """the features ranked highest across the layers: per layer the percentile of the feature's median relative
+    abundance among that layer's features (100 = the most abundant), so layers of different depth, sparsity and
+    scale (counts, protein AUC) are comparable; a feature missing from a layer is blank"""
+    p = data.q("SELECT layer, feature, median_rel, median_clr FROM cohort_concord_presence WHERE \"set\" = ?", [s])
     if p.empty:
         return empty_fig()
-    Z = p.pivot_table(index="feature", columns="layer", values="median_clr").reindex(columns=keys)
-    order = Z.median(axis=1).sort_values(ascending=False).index[:top]
+    p["pct"] = 100 * p.groupby("layer")["median_clr"].rank(pct=True)
+    Z = p.pivot_table(index="feature", columns="layer", values="pct").reindex(columns=keys)
+    order = Z.fillna(0).median(axis=1).sort_values(ascending=False).index[:top]
     Z = Z.loc[order]
+    R = p.pivot_table(index="feature", columns="layer", values="median_rel").reindex(index=order, columns=keys)
     fig = go.Figure(go.Heatmap(z=Z.values, x=[short(data, k) for k in keys], y=list(Z.index), colorscale="Viridis",
-                               colorbar=dict(title="median CLR", thickness=12),
-                               hovertemplate="%{y} · %{x}: %{z:.2f}<extra></extra>"))
-    fig.update_yaxes(autorange="reversed", tickfont=dict(size=10))
+                               zmin=0, zmax=100, customdata=100 * R.values,
+                               colorbar=dict(title="percentile<br>in the layer", thickness=12),
+                               hovertemplate="%{y} · %{x}: percentile %{z:.0f}, median %{customdata:.3g} %"
+                                             "<extra></extra>"))
+    fig.update_yaxes(autorange="reversed", tickfont=dict(size=10), dtick=1, automargin=True)
+    fig.update_xaxes(dtick=1, tickangle=-45, automargin=True)
     style(fig, 120 + 18 * len(order), legend=False)
     fig.update_layout(margin=dict(l=200, r=20, t=20, b=140))
     return fig
@@ -122,9 +131,10 @@ def sparsity(data, s, keys):
                      go.Bar(x=labs, y=100 * g["single"], name="in one sample only (singleton)",
                             marker_color="#edae49")])
     fig.update_yaxes(title="% of the layer's features")
+    fig.update_xaxes(tickangle=-45, automargin=True)
     fig.update_layout(barmode="group")
-    style(fig, 360)
-    fig.update_layout(margin=dict(b=140))
+    style(fig, 420)
+    fig.update_layout(margin=dict(b=40, t=50), legend=dict(orientation="h", x=0, y=1.02, yanchor="bottom"))
     return fig
 
 
@@ -143,9 +153,12 @@ def feature_summary(data, s, keys, q=0.05):
                             marker_color="#d1495b", customdata=d["n"],
                             hovertemplate="%{y}<br>%{x:.0f} % of %{customdata} features<extra></extra>")])
     fig.update_layout(barmode="stack")
-    fig.update_xaxes(title="% of the shared features (Spearman)", range=[0, 100])
-    style(fig, 140 + 26 * len(d))
-    fig.update_layout(margin=dict(l=320, r=20, t=20, b=40))
+    fig.update_xaxes(title="% of the shared features (Spearman)", range=[0, 100], showticklabels=True,
+                     side="bottom")
+    fig.update_yaxes(automargin=True, dtick=1)
+    style(fig, 160 + 24 * len(d))
+    fig.update_layout(margin=dict(l=20, r=20, t=50, b=50), legend=dict(orientation="h", x=0, y=1.0,
+                                                                      yanchor="bottom"))
     return fig
 
 
@@ -166,9 +179,12 @@ def within_fig(data, s):
                              hovertemplate="%{text}: ρ = %{x:.2f}<extra>" + name + "</extra>"))
     fig.update_layout(boxmode="group")
     fig.update_yaxes(categoryorder="array", categoryarray=order[::-1])
-    fig.update_xaxes(title="Spearman ρ of the profiles", range=[-0.2, 1])
-    style(fig, 160 + 46 * len(order))
-    fig.update_layout(margin=dict(l=320, r=20, t=20, b=40))
+    fig.update_xaxes(title="Spearman ρ of the profiles", range=[-0.2, 1], showticklabels=True, mirror="allticks",
+                     side="top")
+    fig.update_yaxes(automargin=True)
+    style(fig, 200 + 46 * len(order))
+    fig.update_layout(margin=dict(l=20, r=20, t=60, b=40), legend=dict(orientation="h", x=0, y=-0.02,
+                                                                      yanchor="top"))
     return fig
 
 
@@ -188,15 +204,17 @@ def layout(data):
         html.Div([card("Overlap of the layers", graph("cc-upset"),
                        note="features detected in at least 2 samples of a layer; the most frequent combinations"),
                   card("Top features across layers", graph("cc-top"),
-                       note="the %d features with the highest median CLR over the layers" % TOP)],
+                       note="the %d features ranked highest across the layers: percentile of the feature's median "
+                            "abundance within each layer (layers of different depth and scale made comparable)"
+                            % TOP)],
                  className="grid g2"),
         html.Div([card("Shannon diversity", graph("cc-alpha"), note="Spearman ρ between layers"),
                   card("Mantel tests", graph("cc-mantel"), note="Pearson r of the Bray-Curtis distances")],
                  className="grid g2"),
-        html.Div([card("Sparsity", graph("cc-sparse"), note="features present in every sample and singletons"),
-                  card("Same feature in two layers", graph("cc-feat"),
-                       note="share of the shared features with a significant Spearman correlation")],
-                 className="grid g2"),
+        card("Sparsity", graph("cc-sparse"), note="features present in every sample and singletons"),
+        card("Same feature in two layers", graph("cc-feat"),
+             note="share of the shared features with a significant Spearman correlation across samples (blue "
+                  "positive, red negative)"),
         card("Within each sample", graph("cc-within"),
              note="Spearman ρ of the two profiles of the same sample over their shared features (blue), and of its "
                   "profile with the other samples' profiles in the other layer (grey, median): blue above grey = "

@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- **Intracellular vs extracellular** (`cohort --fraction-pairs auto|pairs`, tables `cohort_fraction_diff` /
+  `_summary`, page *Intra vs extra*): per feature a paired Wilcoxon on CLR, matched-pairs rank-biserial r and median
+  log2 ratio, BH-FDR per pair.
+- **Contig taxonomy filter** (`cohort --contig-min-share`, default 1e-5): rare taxa of single short contigs left out
+  of the `contig.*` layers.
+- **QC flags for a whole layer**: `sample_id` `*` in the flags file. `--concordance auto` leaves out the
+  extracellular metatranscriptome.
+- **App**: every layer name on the Concordance heatmaps; top features ranked within each layer (percentile)
+  instead of by CLR; legends and axes of the Sparsity, Same feature and Within plots readable; dropdowns with long
+  names no longer overlap.
 - **Contig taxonomy** (`--contig-taxonomy PATTERN` for `export` and `fraction`): the MMseqs2 `easy-taxonomy` LCA
   table of each sample's contigs against GTDB (`<prefix>_lca.tsv`), weighted by the reads on the contigs
   (`Stats/<omic>/*.assembly.contig_read_count.txt`), as taxonomy source `mmseqs2_gtdb`; cohort layers

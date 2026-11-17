@@ -937,6 +937,40 @@ def test_fraction(tmp_path):
     assert "has_mg_ext" not in read_manifest(str(rel))["cohort"]["covariates"]
     pv = read_table(str(rel), "cohort_paper_variance")
     assert "kraken.genus.mg_ext" in set(pv["layer"])
+    # a whole layer flagged FAIL ('*' sample) and intra / extra per feature
+    flags = tmp_path / "flags.tsv"
+    flags.write_text("sample_id\tlayer\tstatus\treason\n*\tmt_ext_remap\tFAIL\tnot usable\n"
+                     "%s\tmt_ext_remap\tWARN\tsingle sample overrides\n" % ids[1])
+    assert sampleqc.main(["--data", str(rel), "--flags", str(flags)]) == 0
+    q = read_table(str(rel), "sample_qc")
+    x = q[q["layer"] == "mt_ext_remap"].set_index("sample_id")["status"]
+    assert x[ids[0]] == "FAIL" and x[ids[1]] == "WARN" and x[ids[-1]] == "missing"
+    rc = cohort.main(["--data", str(rel), "--permutations", "19", "--no-report", "--layers", "kraken.genus.mg",
+                      "--fraction-pairs", "auto", "--concordance", "auto"])
+    assert rc == 0
+    sm = read_table(str(rel), "cohort_fraction_summary")
+    assert ("kraken.genus.mg", "kraken.genus.mg_ext") in set(zip(sm["layer_a"], sm["layer_b"]))
+    fd = read_table(str(rel), "cohort_fraction_diff")
+    assert fd["rbc"].between(-1, 1).all() and fd["q"].between(0, 1).all()
+    # same sample folders copied as the extracellular run: kraken genera identical -> no differences
+    k = fd[fd["layer_b"] == "kraken.genus.mg_ext"]
+    assert (k["q"] > 0.1).all()
+    cm = read_table(str(rel), "cohort_concord_mantel")
+    assert not any("mt_ext" in x for x in set(cm["layer_a"]) | set(cm["layer_b"]))
+
+
+def test_wilcoxon_paired():
+    import numpy as np
+    from scipy.stats import wilcoxon
+    from impexplorer.cohort.fracdiff import wilcoxon_paired
+    rng = np.random.default_rng(3)
+    D = np.round(rng.normal(0.3, 1, (40, 6)), 1)       # ties and zeros
+    D[:5, 0] = 0
+    wp, wm, n, z, p = wilcoxon_paired(D)
+    for j in range(D.shape[1]):
+        r = wilcoxon(D[:, j], zero_method="wilcox", correction=True, method="approx")
+        assert abs(r.pvalue - p[j]) < 1e-10
+        assert abs(min(wp[j], wm[j]) - r.statistic) < 1e-9
 
 
 def test_kraken_db(tmp_path):
@@ -1036,3 +1070,9 @@ def test_contig_taxonomy(tmp_path):
     assert set(g["taxon"]) == {"Blautia_A", "Faecousia"}
     s0 = ct[(ct["sample_id"] == ids[0]) & (ct["rank"] == "domain")]["reads"].sum()
     assert s0 == sum(v for v in imp3.contig_reads(str(ext / ids[0]), "mg").values())
+    from impexplorer import cohort
+    assert cohort.main(["--data", str(rel), "--permutations", "9", "--no-report", "--layers",
+                        "kraken.genus.mg,contig.genus.mg_ext", "--contig-min-share", "0.3"]) == 0
+    st = read_manifest(str(rel))["cohort"]
+    assert st["layers"]["contig.genus.mg_ext"]["features"] <= 2 and st["contig_min_share"] == 0.3
+    assert any("contig.genus.mg_ext:" in n and "taxa kept" in n for n in st["notes"])

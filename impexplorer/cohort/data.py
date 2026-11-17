@@ -309,6 +309,14 @@ class Cohort:
                     if src == "motus" and parts[1] == "species" and d.empty:
                         d = self._old_motus(tax, parts[2])
                     M = d.pivot_table(index="sample_id", columns="taxon", values="reads", aggfunc="sum", fill_value=0)
+                    ms = float(getattr(self.a, "contig_min_share", 0) or 0)
+                    if parts[0] == "contig" and ms > 0 and len(M):
+                        n0 = M.shape[1]
+                        R = M.div(M.sum(axis=1).where(lambda x: x > 0), axis=0)
+                        M = M.where(R >= ms, 0)
+                        M = M.loc[:, M.sum(axis=0) > 0]
+                        self.note("%s: %d of %d taxa kept (>= %g of a sample's reads in at least one sample)"
+                                  % (key, M.shape[1], n0, ms))
                     lab = "%s %s, %s" % (LAYER_LABEL[parts[0]], parts[1], self.omic_label(parts[2]))
                     self._add(key, lab, parts[2], M)
                 elif parts[0] == "mag":

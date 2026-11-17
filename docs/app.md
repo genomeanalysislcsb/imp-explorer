@@ -140,6 +140,15 @@ across layers, sparsity (features in every sample, singletons), Spearman ρ of S
 every two layers, the share of shared features whose abundances correlate between two layers, with the table of
 one pair, and within each sample: how similar its two profiles are compared with other samples' profiles.
 
+Heatmaps show every layer name; the top features are ranked by their percentile within each layer, so layers of
+different depth and scale (reads, protein AUC) can be compared.
+
+## Intra vs extra
+
+Shown with the results of `imp-explorer cohort --fraction-pairs`: the share of features enriched in each fraction per
+pair of layers, and for one pair a volcano plot (rank-biserial r against q), the strongest differences on each side
+and the table of all features.
+
 ## Variance
 
 Shown when the release has the [paper analysis](cohort.md#paper-analysis-paper-model) of `imp-explorer cohort
