@@ -4,7 +4,8 @@
 
 - **Intra vs extra: effect-size threshold** (`cohort --fraction-min-r`, default 0.5; selector on the page): a
   feature counts as enriched with q < `--sig-q` and |rank-biserial r| ≥ the minimum, since with ~180 paired samples
-  almost any shift is significant. The page's summary, volcano (dotted lines) and strongest differences follow it.
+  almost any shift is significant. The page's summary, volcano (dotted lines), strongest differences and table
+  (enriched features by default, or all with the column *enriched*) follow it.
 - Intra vs extra page: summary plot drawn; volcano point size = median abundance; p and q shown with 3 significant
   digits. A test checks every `%`-formatted string of the package.
 - Labels: the metagenome and metatranscriptome of the main export are called *intracellular* once the release has an

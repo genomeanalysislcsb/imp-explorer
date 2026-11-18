@@ -129,9 +129,13 @@ def layout(data):
                   card("Strongest differences", graph("fr-top"),
                        note="the %d features with the largest |r| on each side (enriched)" % TOP)],
                  className="grid g2"),
-        card("Features of the pair", html.Div(id="fr-table"),
+        card("Features of the pair", html.Div([
+            html.Div([control("show", dd("fr-show", [{"label": "enriched features (q and minimum |r|)", "value": "enriched"},
+                                                     {"label": "all tested features", "value": "all"}], "enriched"))],
+                     className="controls"),
+            html.Div(id="fr-table")]),
              note="prevalence and median relative abundance per fraction, median log2 ratio (second / first), r, "
-                  "p and q; sorted by q"),
+                  "p, q and where the feature is enriched; sorted by q"),
     ])
 
 
@@ -140,8 +144,9 @@ def register(app, data):
         if data.has("cohort_fraction_summary") else 0.1
 
     @app.callback(Output("fr-summary", "figure"), Output("fr-volcano", "figure"), Output("fr-top", "figure"),
-                  Output("fr-table", "children"), Input("fr-pair", "value"), Input("fr-minr", "value"))
-    def _pair(pair, min_r):
+                  Output("fr-table", "children"), Input("fr-pair", "value"), Input("fr-minr", "value"),
+                  Input("fr-show", "value"))
+    def _pair(pair, min_r, show):
         min_r = float(min_r or 0)
         summ = summary_fig(data, q, min_r)
         if not pair:
@@ -149,14 +154,18 @@ def register(app, data):
         a, b = pair.split("|")
         d = load(data, a, b)
         la, lb = short(data, a), short(data, b)
-        t = d[["feature", "n", "prev_a", "prev_b", "median_rel_a", "median_rel_b", "median_log2_ratio", "rbc", "p",
-               "q"]].sort_values(["q", "p"]).head(2000)
+        strong = (d["q"] < q) & (d["rbc"].abs() >= min_r)
+        d = d.assign(enriched=np.where(~strong, "", np.where(d["rbc"] > 0, "second", "first")))
+        t = d if show == "all" else d[strong]
+        t = t[["feature", "enriched", "n", "prev_a", "prev_b", "median_rel_a", "median_rel_b", "median_log2_ratio",
+               "rbc", "p", "q"]].sort_values(["q", "p"]).head(2000)
         t = t.rename(columns={"rbc": "r"})
         pq = t[["p", "q"]].copy()
         t = t.round(5)
         t[["p", "q"]] = pq.apply(lambda c: c.map(lambda x: float("%.3g" % x) if x == x else x))   # 3.2e-27, not 0
         return (summ, volcano(d, q, la, lb, min_r), top_fig(d, q, la, lb, min_r),
-                grid("fr-grid", t, height=420, fit=True) if len(t) else html.P("no features", className="hint"))
+                grid("fr-grid", t, height=420, fit=True) if len(t) else
+                html.P("no feature with q < %g and |r| ≥ %g" % (q, min_r), className="hint"))
 
 
 PAGE = Page(path="/fractions", name="Intra vs extra", order=73, layout=layout, register=register,
