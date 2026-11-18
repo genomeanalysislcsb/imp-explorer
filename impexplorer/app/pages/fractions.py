@@ -35,7 +35,7 @@ def summary_fig(data):
                             hovertemplate="%{y}<br>%{customdata[0]} of %{customdata[1]} features<extra></extra>")])
     m = float(max(fa.max(), fb.max(), 5))
     fig.update_layout(barmode="relative")
-    fig.update_xaxes(title="% of the tested features (q < %g)" % d["sig_q"].iloc[0], range=[-m * 1.1, m * 1.1],
+    fig.update_xaxes(title="%% of the tested features (q < %g)" % d["sig_q"].iloc[0], range=[-m * 1.1, m * 1.1],
                      zeroline=True, zerolinecolor="#52606d")
     fig.update_yaxes(automargin=True, dtick=1)
     style(fig, 180 + 30 * len(d))
