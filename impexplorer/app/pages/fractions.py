@@ -52,11 +52,15 @@ def volcano(d, q, la, lb):
         return empty_fig()
     y = -np.log10(d["q"].clip(lower=1e-300))
     col = np.where(d["q"] >= q, NS_COL, np.where(d["rbc"] > 0, B_COL, A_COL))
+    # point size = abundance: median relative abundance in the fraction where the feature is higher (1e-6 .. 1e-1)
+    ab = np.maximum(d["median_rel_a"].fillna(0), d["median_rel_b"].fillna(0)).astype(float)
+    size = 3 + 3 * np.clip(np.log10(np.maximum(ab, 1e-6)) + 6, 0, 5)
     fig = go.Figure(go.Scattergl(x=d["rbc"], y=y, mode="markers", text=d["feature"],
-                                 marker=dict(size=5, color=col, opacity=0.75),
-                                 customdata=np.c_[d["median_log2_ratio"], d["n"]],
+                                 marker=dict(size=size, color=col, opacity=0.7, line=dict(width=0)),
+                                 customdata=np.c_[d["median_log2_ratio"], d["n"], 100 * ab],
                                  hovertemplate="%{text}<br>r = %{x:.2f}, q = 10^-%{y:.1f}<br>median log2 ratio "
-                                               "%{customdata[0]:.2f}, n = %{customdata[1]}<extra></extra>"))
+                                               "%{customdata[0]:.2f}, n = %{customdata[1]}<br>median abundance "
+                                               "%{customdata[2]:.3g} %<extra></extra>"))
     fig.add_hline(y=-np.log10(q), line=dict(color="#9aa5b1", dash="dot"))
     fig.update_xaxes(title="rank-biserial r   (← higher in %s · higher in %s →)" % (la, lb), range=[-1.05, 1.05])
     fig.update_yaxes(title="−log10 q")
@@ -97,7 +101,9 @@ def layout(data):
                   "(right) fraction"),
         html.Div([control("pair of layers", dd("fr-pair", ps, ps[0]["value"] if ps else None))],
                  className="controls"),
-        html.Div([card("Volcano", graph("fr-volcano"), note="each point a feature; dotted line q = %g" % q),
+        html.Div([card("Volcano", graph("fr-volcano"),
+                       note="each point a feature, its size the median abundance in the fraction where it is higher "
+                            "(1e-6 to 10 %%); dotted line q = %g" % q),
                   card("Strongest differences", graph("fr-top"),
                        note="the %d features with the largest |r| on each side (q < %g)" % (TOP, q))],
                  className="grid g2"),
@@ -111,23 +117,23 @@ def register(app, data):
     q = float(data.q("SELECT max(sig_q) AS q FROM cohort_fraction_summary")["q"].iloc[0] or 0.1) \
         if data.has("cohort_fraction_summary") else 0.1
 
-    @app.callback(Output("fr-summary", "figure"), Input("fr-pair", "id"))
-    def _summary(_):
-        return summary_fig(data)
-
-    @app.callback(Output("fr-volcano", "figure"), Output("fr-top", "figure"), Output("fr-table", "children"),
-                  Input("fr-pair", "value"))
+    @app.callback(Output("fr-summary", "figure"), Output("fr-volcano", "figure"), Output("fr-top", "figure"),
+                  Output("fr-table", "children"), Input("fr-pair", "value"))
     def _pair(pair):
+        summ = summary_fig(data)
         if not pair:
-            return empty_fig(), empty_fig(), html.P("no pair", className="hint")
+            return summ, empty_fig(), empty_fig(), html.P("no pair", className="hint")
         a, b = pair.split("|")
         d = load(data, a, b)
         la, lb = short(data, a), short(data, b)
         t = d[["feature", "n", "prev_a", "prev_b", "median_rel_a", "median_rel_b", "median_log2_ratio", "rbc", "p",
                "q"]].sort_values(["q", "p"]).head(2000)
         t = t.rename(columns={"rbc": "r"})
-        return (volcano(d, q, la, lb), top_fig(d, q, la, lb),
-                grid("fr-grid", t.round(5), height=420, fit=True) if len(t) else html.P("no features", className="hint"))
+        pq = t[["p", "q"]].copy()
+        t = t.round(5)
+        t[["p", "q"]] = pq.apply(lambda c: c.map(lambda x: float("%.3g" % x) if x == x else x))   # 3.2e-27, not 0
+        return (summ, volcano(d, q, la, lb), top_fig(d, q, la, lb),
+                grid("fr-grid", t, height=420, fit=True) if len(t) else html.P("no features", className="hint"))
 
 
 PAGE = Page(path="/fractions", name="Intra vs extra", order=73, layout=layout, register=register,
