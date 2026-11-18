@@ -14,6 +14,7 @@ layer's sample_qc left out, as --paper-qc):
              continuity correction; zero differences dropped, fewer than 6 non-zero ones: p = 1), BH-FDR per pair
   effect     matched-pairs rank-biserial correlation r = (W+ - W-) / (W+ + W-), -1..1: > 0 higher in b (e.g.
              extracellular), the paired counterpart of Cliff's delta; median log2 ratio b / a of the closed profiles
+  enriched   q < --sig-q and |r| >= --fraction-min-r (default 0.5: with ~180 pairs almost any shift is significant)
 """
 import numpy as np
 import pandas as pd
@@ -119,6 +120,7 @@ def run(C, a):
     Ms = matrices(C, a, sorted({k for pr in pairs for k in pr}))
     rows, summ = [], []
     q_sig = getattr(a, "sig_q", 0.1)
+    min_r = float(getattr(a, "fraction_min_r", 0.5) or 0)
     for la, lb in pairs:
         if la not in Ms or lb not in Ms:
             continue
@@ -131,11 +133,17 @@ def run(C, a):
         d.insert(0, "layer_a", la)
         rows.append(d)
         sig = d["q"] < q_sig
+        strong = sig & (d["rbc"].abs() >= min_r)
         summ.append({"layer_a": la, "layer_b": lb, "samples": int(d["n"].iloc[0]), "features": len(d),
-                     "higher_in_a": int((sig & (d["rbc"] < 0)).sum()), "higher_in_b": int((sig & (d["rbc"] > 0)).sum()),
-                     "median_rbc": float(np.nanmedian(d["rbc"])), "sig_q": q_sig})
-        C.note("fraction pair %s / %s: %d samples, %d features, %d higher in %s, %d higher in %s (q < %g)"
-               % (la, lb, summ[-1]["samples"], len(d), summ[-1]["higher_in_a"], la, summ[-1]["higher_in_b"], lb, q_sig))
+                     "higher_in_a": int((strong & (d["rbc"] < 0)).sum()),
+                     "higher_in_b": int((strong & (d["rbc"] > 0)).sum()),
+                     "higher_in_a_any": int((sig & (d["rbc"] < 0)).sum()),
+                     "higher_in_b_any": int((sig & (d["rbc"] > 0)).sum()),
+                     "median_rbc": float(np.nanmedian(d["rbc"])), "sig_q": q_sig, "min_r": min_r})
+        C.note("fraction pair %s / %s: %d samples, %d features, %d higher in %s, %d higher in %s (q < %g, |r| >= %g; "
+               "q only: %d / %d)" % (la, lb, summ[-1]["samples"], len(d), summ[-1]["higher_in_a"], la,
+                                    summ[-1]["higher_in_b"], lb, q_sig, min_r, summ[-1]["higher_in_a_any"],
+                                    summ[-1]["higher_in_b_any"]))
     if not rows:
         return {}
     return {"fraction_diff": pd.concat(rows, ignore_index=True), "fraction_summary": pd.DataFrame(summ)}

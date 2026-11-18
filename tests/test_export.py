@@ -933,6 +933,7 @@ def test_fraction(tmp_path):
     assert rc == 0
     st = read_manifest(str(rel))["cohort"]["layers"]
     assert st["kraken.genus.mg_ext"]["label"] == "Kraken2/Bracken genus, extracellular metagenome"
+    assert st["kraken.genus.mg"]["label"] == "Kraken2/Bracken genus, intracellular metagenome"
     assert "kegg_ko.mt_ext_remap" in st and "kraken.genus.mt_ext_remap" not in st
     assert "has_mg_ext" not in read_manifest(str(rel))["cohort"]["covariates"]
     pv = read_table(str(rel), "cohort_paper_variance")
@@ -950,6 +951,7 @@ def test_fraction(tmp_path):
     assert rc == 0
     sm = read_table(str(rel), "cohort_fraction_summary")
     assert ("kraken.genus.mg", "kraken.genus.mg_ext") in set(zip(sm["layer_a"], sm["layer_b"]))
+    assert (sm["min_r"] == 0.5).all() and (sm["higher_in_a"] <= sm["higher_in_a_any"]).all()
     fd = read_table(str(rel), "cohort_fraction_diff")
     assert fd["rbc"].between(-1, 1).all() and fd["q"].between(0, 1).all()
     # same sample folders copied as the extracellular run: kraken genera identical -> no differences

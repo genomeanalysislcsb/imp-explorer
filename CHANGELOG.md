@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+- **Intra vs extra: effect-size threshold** (`cohort --fraction-min-r`, default 0.5; selector on the page): a
+  feature counts as enriched with q < `--sig-q` and |rank-biserial r| ≥ the minimum, since with ~180 paired samples
+  almost any shift is significant. The page's summary, volcano (dotted lines) and strongest differences follow it.
+- Intra vs extra page: summary plot drawn; volcano point size = median abundance; p and q shown with 3 significant
+  digits. A test checks every `%`-formatted string of the package.
+- Labels: the metagenome and metatranscriptome of the main export are called *intracellular* once the release has an
+  extracellular fraction (as the protein fractions already were).
+
 ## 0.4.0 (2026-11)
 
 The analyses of a multi-omics cohort paper (Expobiome, cross-sectional part) in the explorer: QC flags per sample and

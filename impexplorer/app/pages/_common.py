@@ -307,8 +307,13 @@ OMIC_COLOR = {"mg": "#1f2933", "mt": "#d1495b", "mp_extra": "#2a6f97", "mp_intra
 
 
 def omic_label(data, o):
-    lab = data.manifest.get("proteomics", {}).get("fractions", {}).get(o)
-    return {"mg": "metagenome", "mt": "metatranscriptome"}.get(o, lab or o)
+    lab = data.manifest.get("proteomics", {}).get("fractions", {}).get(o) or \
+        data.manifest.get("fractions", {}).get(o, {}).get("label")
+    if o in ("mg", "mt"):            # the main export: 'intracellular' once the release has an extracellular fraction
+        ext = any(str(v.get("label", "")).startswith("extracellular")
+                  for v in data.manifest.get("fractions", {}).values())
+        return ("intracellular " if ext else "") + {"mg": "metagenome", "mt": "metatranscriptome"}[o]
+    return lab or o
 
 
 def omics_boxes(series, groups, cmap, title, ytitle, height=420):

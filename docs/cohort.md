@@ -252,12 +252,14 @@ layer's `sample_qc` left out), the features detected in ≥ `--prevalence` of th
 profiles are closed to these features and CLR-transformed. Per feature a paired Wilcoxon signed-rank test of
 CLR(second) − CLR(first), the matched-pairs rank-biserial correlation r as effect size (−1 every sample higher in the
 first fraction, +1 every sample higher in the second; the paired counterpart of Cliff's delta) and the median log2
-ratio; BH-FDR per pair.
+ratio; BH-FDR per pair. A feature counts as enriched in a fraction with q < `--sig-q` and |r| ≥ `--fraction-min-r`
+(default 0.5, i.e. at least three in four samples go the same way): with ~180 paired samples almost any shift is
+significant, so q alone marks most features. 0 counts by q only.
 
 | table | what |
 |---|---|
 | `cohort_fraction_diff` | per pair and feature: n, prevalence and median relative abundance per fraction, median log2 ratio, r, z, p, q |
-| `cohort_fraction_summary` | per pair: samples, features tested, features higher in each fraction (q < `--sig-q`) |
+| `cohort_fraction_summary` | per pair: samples, features tested, features enriched in each fraction (q < `--sig-q` and |r| ≥ `--fraction-min-r`; `_any`: q only) |
 
 The app shows them on the Intra vs extra page.
 

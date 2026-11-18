@@ -64,7 +64,7 @@ def settings_dict(C, A, a):
             "nmds": a.nmds, "nmds_starts": getattr(a, "nmds_starts", None),
             "paper": {"model": a.paper_model, "transform": a.paper_transform, "qc": a.paper_qc}
             if a.paper_model else {},
-            "concordance": a.concordance, "fraction_pairs": a.fraction_pairs,
+            "concordance": a.concordance, "fraction_pairs": a.fraction_pairs, "fraction_min_r": a.fraction_min_r,
             "contig_min_share": a.contig_min_share,
             "samples": len(C.samples), "kept": len(C.kept), "excluded": C.excluded,
             "config": os.path.abspath(a.config) if a.config else "", "from_config": a.from_config, "notes": C.log}

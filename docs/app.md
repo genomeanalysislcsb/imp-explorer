@@ -146,8 +146,9 @@ different depth and scale (reads, protein AUC) can be compared.
 ## Intra vs extra
 
 Shown with the results of `imp-explorer cohort --fraction-pairs`: the share of features enriched in each fraction per
-pair of layers, and for one pair a volcano plot (rank-biserial r against q), the strongest differences on each side
-and the table of all features.
+pair of layers, and for one pair a volcano plot (rank-biserial r against q, point size = abundance), the strongest
+differences on each side and the table of all features. The minimum |r| (default from `--fraction-min-r`) decides
+which significant features count as enriched in the summary and the plots.
 
 ## Variance
 

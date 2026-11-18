@@ -23,7 +23,7 @@ ALIASES = {"match_col": "block", "group": "group_col", "groups": "group_order", 
 CONFIG_KEYS = ("metadata", "dictionary", "id_col", "group_col", "group_order", "reference", "block", "covariates", "model",
                "model_notes", "permutations", "sig_q", "outlier_z", "qc_drop", "term_names", "name", "layers",
                "prevalence", "min_mg_pairs", "min_mt_pairs", "nmds", "nmds_starts", "paper_model", "paper_transform",
-               "paper_qc", "concordance", "contig_min_share", "fraction_pairs")
+               "paper_qc", "concordance", "contig_min_share", "fraction_pairs", "fraction_min_r")
 IGNORED = {"dir", "min_mirna_reads"}       # sRNA-specific COHORT_* keys without meaning here
 
 DEFAULT_LAYERS = ("kraken.genus.mg,kraken.genus.mt,kraken.species.mg,kraken.species.mt,"
@@ -132,6 +132,7 @@ contig_min_share: 1e-5
 # intracellular vs extracellular per feature (paired Wilcoxon, rank-biserial effect, BH-FDR): pairs of layers with
 #   the same features, 'a,b; c,d' or auto (mg / mg_ext, proteins intra / extra, sRNA int / ext, ...)
 fraction_pairs:
+fraction_min_r: 0.5       # a feature counts as enriched in a fraction with q < sig_q and |r| >= this (0 = q only)
 """
 
 
@@ -193,6 +194,9 @@ def parser():
     ap.add_argument("--fraction-pairs", default=None, help="intracellular vs extracellular per feature: 'auto' or "
                     "pairs of layers, 'kraken.genus.mg,kraken.genus.mg_ext; prot.genus.intra,prot.genus.extra' (paired "
                     "Wilcoxon on CLR, rank-biserial effect, BH-FDR)  [off]")
+    ap.add_argument("--fraction-min-r", type=float, default=None, help="intra vs extra: a feature counts as enriched "
+                    "with q < --sig-q and |rank-biserial r| >= this; with ~180 pairs almost every shift is significant  "
+                    "[0.5; 0 = q only]")
     ap.add_argument("--term-names", default=None, help="TSV(s) term<TAB>name or KEGG flat files for readable labels")
     ap.add_argument("--name", default=None, help="title of the report  [study name]")
     ap.add_argument("--no-release-tables", action="store_true", help="do not write cohort_* tables into the release")
@@ -207,9 +211,10 @@ DEFAULTS = {"metadata": "", "dictionary": "", "id_col": "", "group_col": "group"
             "qc_drop": "FAIL", "term_names": "", "name": "", "layers": DEFAULT_LAYERS, "prevalence": 0.1,
             "min_mg_pairs": 1e6, "min_mt_pairs": 1e6, "nmds": "kraken.genus.mg,kegg_pathway.mg", "nmds_starts": 5,
             "paper_model": "", "paper_transform": "tss", "paper_qc": "FAIL",
-            "concordance": "", "contig_min_share": 1e-5, "fraction_pairs": ""}
+            "concordance": "", "contig_min_share": 1e-5, "fraction_pairs": "",
+            "fraction_min_r": 0.5}
 TYPES = {"permutations": int, "nmds_starts": int, "sig_q": float, "outlier_z": float, "prevalence": float, "min_mg_pairs": float,
-         "min_mt_pairs": float, "contig_min_share": float}
+         "min_mt_pairs": float, "contig_min_share": float, "fraction_min_r": float}
 
 
 RANKS = ("phylum", "class", "order", "family", "genus", "species")

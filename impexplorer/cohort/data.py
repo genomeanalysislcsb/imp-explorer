@@ -284,8 +284,10 @@ class Cohort:
     # ------------------------------------------------------------------ layers
     def omic_label(self, o):
         """metagenome / metatranscriptome, or the label of a fraction added with 'imp-explorer fraction'"""
-        if o in OMIC:
-            return OMIC[o]
+        if o in OMIC:            # the main export: 'intracellular' once the release has an extracellular fraction
+            ext = any(str(v.get("label", "")).startswith("extracellular")
+                      for v in self.manifest.get("fractions", {}).values())
+            return ("intracellular " if ext else "") + OMIC[o]
         lab = self.manifest.get("fractions", {}).get(o, {}).get("label")
         if lab:
             return lab

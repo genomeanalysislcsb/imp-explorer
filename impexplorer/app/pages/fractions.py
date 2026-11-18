@@ -20,10 +20,24 @@ def pairs(data):
             for a, b in zip(d["layer_a"], d["layer_b"])]
 
 
-def summary_fig(data):
+MIN_R = [0, 0.3, 0.5, 0.7, 0.9]
+
+
+def default_min_r(data):
     d = data.q("SELECT * FROM cohort_fraction_summary")
+    return float(d["min_r"].iloc[0]) if "min_r" in d.columns and len(d) else 0.5
+
+
+def summary_fig(data, q, min_r):
+    """per pair the share of tested features enriched in each fraction: q < q and |r| >= min_r"""
+    d = data.q("SELECT layer_a, layer_b, count(*) AS features, "
+               "sum(CASE WHEN q < ? AND rbc <= -? THEN 1 ELSE 0 END) AS higher_in_a, "
+               "sum(CASE WHEN q < ? AND rbc >= ? THEN 1 ELSE 0 END) AS higher_in_b "
+               "FROM cohort_fraction_diff GROUP BY 1, 2", [q, min_r, q, min_r])
     if d.empty:
         return empty_fig()
+    order = data.q("SELECT layer_a, layer_b FROM cohort_fraction_summary")
+    d = order.merge(d, on=["layer_a", "layer_b"], how="left").fillna(0)
     d["pair"] = ["%s → %s" % (short(data, a), short(data, b)) for a, b in zip(d["layer_a"], d["layer_b"])]
     d = d.iloc[::-1]
     fa, fb = 100 * d["higher_in_a"] / d["features"], 100 * d["higher_in_b"] / d["features"]
@@ -35,7 +49,7 @@ def summary_fig(data):
                             hovertemplate="%{y}<br>%{customdata[0]} of %{customdata[1]} features<extra></extra>")])
     m = float(max(fa.max(), fb.max(), 5))
     fig.update_layout(barmode="relative")
-    fig.update_xaxes(title="%% of the tested features (q < %g)" % d["sig_q"].iloc[0], range=[-m * 1.1, m * 1.1],
+    fig.update_xaxes(title="%% of the tested features (q < %g, |r| ≥ %g)" % (q, min_r), range=[-m * 1.1, m * 1.1],
                      zeroline=True, zerolinecolor="#52606d")
     fig.update_yaxes(automargin=True, dtick=1)
     style(fig, 180 + 30 * len(d))
@@ -47,11 +61,12 @@ def load(data, a, b):
     return data.q("SELECT * FROM cohort_fraction_diff WHERE layer_a = ? AND layer_b = ?", [a, b])
 
 
-def volcano(d, q, la, lb):
+def volcano(d, q, la, lb, min_r=0.0):
     if d.empty:
         return empty_fig()
     y = -np.log10(d["q"].clip(lower=1e-300))
-    col = np.where(d["q"] >= q, NS_COL, np.where(d["rbc"] > 0, B_COL, A_COL))
+    weak = (d["q"] >= q) | (d["rbc"].abs() < min_r)
+    col = np.where(weak, NS_COL, np.where(d["rbc"] > 0, B_COL, A_COL))
     # point size = abundance: median relative abundance in the fraction where the feature is higher (1e-6 .. 1e-1)
     ab = np.maximum(d["median_rel_a"].fillna(0), d["median_rel_b"].fillna(0)).astype(float)
     size = 3 + 3 * np.clip(np.log10(np.maximum(ab, 1e-6)) + 6, 0, 5)
@@ -62,16 +77,19 @@ def volcano(d, q, la, lb):
                                                "%{customdata[0]:.2f}, n = %{customdata[1]}<br>median abundance "
                                                "%{customdata[2]:.3g} %<extra></extra>"))
     fig.add_hline(y=-np.log10(q), line=dict(color="#9aa5b1", dash="dot"))
+    if min_r > 0:
+        for x in (-min_r, min_r):
+            fig.add_vline(x=x, line=dict(color="#9aa5b1", dash="dot"))
     fig.update_xaxes(title="rank-biserial r   (← higher in %s · higher in %s →)" % (la, lb), range=[-1.05, 1.05])
     fig.update_yaxes(title="−log10 q")
     style(fig, 460, legend=False)
     return fig
 
 
-def top_fig(d, q, la, lb, top=TOP):
-    s = d[d["q"] < q]
+def top_fig(d, q, la, lb, min_r=0.0, top=TOP):
+    s = d[(d["q"] < q) & (d["rbc"].abs() >= min_r)]
     if s.empty:
-        return empty_fig("no feature with q < %g" % q)
+        return empty_fig("no feature with q < %g and |r| ≥ %g" % (q, min_r))
     s = s.reindex(s["rbc"].abs().sort_values(ascending=False).index)
     s = s.groupby(s["rbc"] > 0, group_keys=False).head(top).sort_values("rbc")
     fig = go.Figure(go.Bar(y=s["feature"], x=s["rbc"], orientation="h",
@@ -88,24 +106,28 @@ def top_fig(d, q, la, lb, top=TOP):
 
 def layout(data):
     ps = pairs(data)
+    r0 = default_min_r(data)
     q = float(data.q("SELECT max(sig_q) AS q FROM cohort_fraction_summary")["q"].iloc[0] or 0.1)
     return html.Div([
         html.H2("Intracellular vs extracellular"),
         html.P("Per feature, which fraction of the same samples has more of it ('imp-explorer cohort "
                "--fraction-pairs'): paired Wilcoxon signed-rank test of the CLR values (each fraction closed to the "
                "features of the pair), matched-pairs rank-biserial correlation r as effect size (−1 all samples higher "
-               "in the first fraction, +1 all higher in the second), BH-FDR per pair (q < %g). Samples flagged FAIL "
-               "in a layer's QC are left out." % q, className="lead"),
+               "in the first fraction, +1 all higher in the second), BH-FDR per pair (q < %g). A feature counts as "
+               "enriched with q < %g and |r| at least the chosen minimum: with ~180 paired samples almost any shift "
+               "is significant. Samples flagged FAIL in a layer's QC are left out." % (q, q), className="lead"),
+        html.Div([control("minimum |r|", dd("fr-minr", [{"label": "%g%s" % (x, " (q only)" if x == 0 else ""),
+                                                          "value": x} for x in sorted(set(MIN_R + [r0]))], r0))],
+                 className="controls"),
         card("Features enriched per fraction", graph("fr-summary"),
-             note="share of each pair's tested features significantly higher in the first (left) or the second "
-                  "(right) fraction"),
+             note="share of each pair's tested features enriched in the first (left) or the second (right) fraction"),
         html.Div([control("pair of layers", dd("fr-pair", ps, ps[0]["value"] if ps else None))],
                  className="controls"),
         html.Div([card("Volcano", graph("fr-volcano"),
                        note="each point a feature, its size the median abundance in the fraction where it is higher "
-                            "(1e-6 to 10 %%); dotted line q = %g" % q),
+                            "(1e-6 to 10 %%); dotted lines q = %g and the minimum |r|" % q),
                   card("Strongest differences", graph("fr-top"),
-                       note="the %d features with the largest |r| on each side (q < %g)" % (TOP, q))],
+                       note="the %d features with the largest |r| on each side (enriched)" % TOP)],
                  className="grid g2"),
         card("Features of the pair", html.Div(id="fr-table"),
              note="prevalence and median relative abundance per fraction, median log2 ratio (second / first), r, "
@@ -118,9 +140,10 @@ def register(app, data):
         if data.has("cohort_fraction_summary") else 0.1
 
     @app.callback(Output("fr-summary", "figure"), Output("fr-volcano", "figure"), Output("fr-top", "figure"),
-                  Output("fr-table", "children"), Input("fr-pair", "value"))
-    def _pair(pair):
-        summ = summary_fig(data)
+                  Output("fr-table", "children"), Input("fr-pair", "value"), Input("fr-minr", "value"))
+    def _pair(pair, min_r):
+        min_r = float(min_r or 0)
+        summ = summary_fig(data, q, min_r)
         if not pair:
             return summ, empty_fig(), empty_fig(), html.P("no pair", className="hint")
         a, b = pair.split("|")
@@ -132,7 +155,7 @@ def register(app, data):
         pq = t[["p", "q"]].copy()
         t = t.round(5)
         t[["p", "q"]] = pq.apply(lambda c: c.map(lambda x: float("%.3g" % x) if x == x else x))   # 3.2e-27, not 0
-        return (summ, volcano(d, q, la, lb), top_fig(d, q, la, lb),
+        return (summ, volcano(d, q, la, lb, min_r), top_fig(d, q, la, lb, min_r),
                 grid("fr-grid", t, height=420, fit=True) if len(t) else html.P("no features", className="hint"))
 
 
