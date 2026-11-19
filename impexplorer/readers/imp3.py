@@ -73,7 +73,7 @@ def assembly_prefix(base):
 
 def omics_present(base):
     return [o for o in OMICS if find(base, "Stats/%s/%s.read_stats.tsv" % (o, o), "Stats/%s/%s.stats" % (o, o),
-                                       "Preprocessing/%s.r1.preprocessed.fq.gz" % o)]
+                                       "Stats/%s/fastp.%s.json" % (o, o), "Preprocessing/%s.r1.preprocessed.fq.gz" % o)]
 
 
 # ----------------------------------------------------------------------------- QC
@@ -87,6 +87,8 @@ def qc(base, sample):
 
     # IMP3 summary statistics (Stats/all_stats.tsv: type, step, number; reads per step, mapping, annotation)
     st = table(find(base, "Stats/all_stats.tsv"))
+    if len(st.columns) == 3 and not {"type", "step", "number"} <= set(st.columns):   # written without a header
+        st = table(find(base, "Stats/all_stats.tsv"), header=None, names=["type", "step", "number"])
     if {"type", "step", "number"} <= set(st.columns):
         for _, r in st.iterrows():
             add(r["type"], "imp:" + r["step"], r["number"])
@@ -100,6 +102,31 @@ def qc(base, sample):
                     for col, m in (("num_seqs", "pairs"), ("avg_len", "avg_len"), ("Q30(%)", "q30_pct"),
                                    ("GC(%)", "gc_pct")):
                         add(o, "%s:%s" % (tag, m), r.get(col))
+        # IMP3 3.0 without read_stats.tsv: trimmed pairs from all_stats (R1 after fastp), raw pairs and read
+        # quality from fastp's JSON report
+        have = {m for _, oo, m, _ in rows if oo == o}
+        if "trimmed:pairs" not in have and {"type", "step", "number"} <= set(st.columns):
+            x = st[(st["type"] == o) & st["step"].isin(["%s.r1.trimmed.fq.gz" % o, "%s.r1.trimmed.fq" % o])]
+            if len(x):
+                add(o, "trimmed:pairs", x["number"].iloc[0])
+        fj = find(base, "Stats/%s/fastp.%s.json" % (o, o))
+        if fj and "raw:pairs" not in have:
+            import json
+            try:
+                js = json.loads(text(fj))
+            except ValueError:
+                js = {}
+            pe = js.get("summary", {}).get("sequencing", "").startswith("paired")
+            for tag, key in (("raw", "before_filtering"), ("trimmed", "after_filtering")):
+                sm = js.get("summary", {}).get(key, {})
+                if not sm:
+                    continue
+                if "%s:pairs" % tag not in have and not (tag == "trimmed" and any(
+                        r[1] == o and r[2] == "trimmed:pairs" for r in rows)):
+                    add(o, "%s:pairs" % tag, sm.get("total_reads", 0) / (2 if pe else 1))
+                add(o, "%s:avg_len" % tag, sm.get("read1_mean_length"))
+                add(o, "%s:q30_pct" % tag, 100 * sm["q30_rate"] if "q30_rate" in sm else None)
+                add(o, "%s:gc_pct" % tag, 100 * sm["gc_content"] if "gc_content" in sm else None)
         # Nonpareil diversity (mean of R1 / R2)
         vals = []
         for rr in ("r1", "r2"):
