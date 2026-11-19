@@ -1089,3 +1089,62 @@ def test_flags_spaces(tmp_path):
     f = read_flags(str(p))
     assert list(f["status"]) == ["FAIL", "FAIL"] and f["reason"].iloc[1].startswith("extracellular mt: single")
     assert f["sample_id"].iloc[1] == "*" and f["layer"].iloc[1] == "mt_ext"
+
+
+def test_permanova_margin_vegan():
+    """multivariable PERMANOVA as vegan::adonis2(by = "margin"): marginal SS, reduced-model permutations
+    (checked on Euclidean distances of one variable, where it must equal type II ANOVA and Freedman-Lane)"""
+    import numpy as np
+    from impexplorer.cohort.stats import design_matrix, jaccard, permanova, permanova_margin
+    rng = np.random.default_rng(7)
+    n = 60
+    g = np.repeat(["A", "B", "C"], 20)
+    site = np.where(rng.random(n) < np.where(g == "A", 0.5, np.where(g == "B", 0.9, 0.1)), "K", "B")  # confounded
+    age = rng.normal(50, 10, n)
+    y = (g == "B") * 1.0 + (site == "K") * 0.8 + 0.03 * age + rng.normal(0, 1, n)
+    rows = [{"g": a, "site": b, "age": c} for a, b, c in zip(g, site, age)]
+    X, _, owner, _ = design_matrix(rows, ["g", "site", "age"], {"age": "numeric"})
+    D = np.abs(y[:, None] - y[None, :])
+    out, (df_res, ss_res), sst = permanova_margin(D, X, owner, perms=199, seed=3)
+    H = X @ np.linalg.pinv(X) ; yc = y - y.mean()
+    assert abs(sst - yc @ yc) < 1e-8 and abs(ss_res - y @ (np.eye(n) - H) @ y) < 1e-8
+    perms_rng = np.random.default_rng(3)
+    perms = [perms_rng.permutation(n) for _ in range(199)]
+    for t, df, ss, r2, F, p in out:
+        keep = [j for j, o in enumerate(owner) if o != t]
+        Hr = X[:, keep] @ np.linalg.pinv(X[:, keep])
+        ss2 = y @ (H - Hr) @ y                                        # type II SS of the term
+        assert abs(ss - ss2) < 1e-8 and abs(F - (ss2 / df) / (ss_res / df_res)) < 1e-8
+        yr = y - Hr @ y                                               # Freedman-Lane: permute reduced residuals
+        ge = 0
+        for pp in perms:
+            ys = Hr @ y + yr[pp]
+            ssp = ys @ (H - Hr) @ ys
+            rsp = ys @ (np.eye(n) - H) @ ys
+            ge += (ssp / df) / (rsp / df_res) >= F - 1e-12
+        assert abs(p - (ge + 1) / 200) < 1e-12, (t, p, (ge + 1) / 200)
+    # one term: the classic one-way PERMANOVA
+    B = rng.random((30, 12))
+    Db = np.array([[np.abs(a - b).sum() / (a + b).sum() for b in B] for a in B])
+    lab = np.repeat(["x", "y", "z"], 10)
+    F1, r21, _ = permanova(Db, lab, perms=9)
+    rows1 = [{"grp": v} for v in lab]
+    X1, _, own1, _ = design_matrix(rows1, ["grp"], {})
+    o1, _, _ = permanova_margin(Db, X1, own1, perms=9)
+    assert abs(F1 - o1[0][4]) < 1e-8 and abs(r21 - o1[0][3]) < 1e-8
+    try:                                         # the app's wrappers (need the app's packages, e.g. dash)
+        from impexplorer.app.stats import permanova as app_permanova, permanova_terms
+    except ImportError:
+        app_permanova = None
+    if app_permanova is not None:
+        F2, r22, _ = app_permanova(Db, lab, perms=9)
+        assert abs(F1 - F2) < 1e-8 and abs(r21 - r22) < 1e-8
+        t = permanova_terms(Db, {"grp": lab, "x": rng.normal(size=30)}, perms=19)
+        assert list(t["term"]) == ["grp", "x", "(residual)", "(total)"] and abs(t["R2"].iloc[-1] - 1) < 1e-12
+    # Jaccard (presence / absence) and the quantitative form
+    P = np.array([[1, 0, 2, 0], [3, 1, 0, 0], [0, 0, 0, 0]], float)
+    J = jaccard(P)
+    assert abs(J[0, 1] - (1 - 1 / 3)) < 1e-12 and J[2, 2] == 0 and J[0, 2] == 1 and np.allclose(J, J.T)
+    Jq = jaccard(P, binary=False)
+    bc = np.abs(P[0] - P[1]).sum() / (P[0] + P[1]).sum()
+    assert abs(Jq[0, 1] - 2 * bc / (1 + bc)) < 1e-12

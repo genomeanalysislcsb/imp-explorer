@@ -319,6 +319,35 @@ def bray_curtis(X):
     return (D + D.T) / 2
 
 
+def jaccard(X, binary=True):
+    """X: samples x features -> Jaccard distance matrix. binary (default): presence / absence, 1 - |A & B| / |A | B|
+    (vegan::vegdist(method = "jaccard", binary = TRUE)); binary=False: the quantitative Jaccard of vegan,
+    2 BC / (1 + BC) from the Bray-Curtis dissimilarity of the same data. Two empty samples: 0"""
+    X = np.asarray(X, float)
+    if not binary:
+        B = bray_curtis(X)
+        return 2 * B / (1 + B)
+    P = (X > 0).astype(float)
+    inter = P @ P.T
+    s = P.sum(axis=1)
+    union = s[:, None] + s[None, :] - inter
+    D = np.where(union > 0, 1 - inter / np.where(union > 0, union, 1), 0.0)
+    np.fill_diagonal(D, 0)
+    return D
+
+
+def distance(X, method="bray"):
+    """distance matrix of samples x features: bray (Bray-Curtis, default), jaccard (presence / absence) or
+    jaccard_quant (quantitative Jaccard)"""
+    if method == "bray":
+        return bray_curtis(np.asarray(X, float))
+    if method == "jaccard":
+        return jaccard(X, binary=True)
+    if method == "jaccard_quant":
+        return jaccard(X, binary=False)
+    raise ValueError("unknown distance %r (bray, jaccard, jaccard_quant)" % method)
+
+
 def log_values(X):
     """metabolomics values -> log2(x + half the smallest positive value of the feature); negative input (already on
     a log scale) is returned unchanged"""
@@ -639,6 +668,78 @@ def permanova_partial(D, labels, strata, perms=999, seed=1):
             out[idx] = labels[rng.permutation(idx)]
         ge += stat(ssw(cell(out))) >= f
     return f, (w_s - w_c) / sst, (ge + 1) / (perms + 1)
+
+
+def _hat(X):
+    return X @ np.linalg.pinv(X.T @ X) @ X.T
+
+
+def gower(D):
+    """Gower-centred matrix of -D^2 / 2 (the sums of squares of PERMANOVA are traces of hat matrices times it)"""
+    n = D.shape[0]
+    J = np.eye(n) - 1.0 / n
+    return J @ (-0.5 * np.asarray(D, float) ** 2) @ J
+
+
+def permanova_margin(D, X, owner, perms=999, seed=1, strata=None):
+    """multivariable PERMANOVA with marginal sums of squares per term, as vegan::adonis2(by = "margin"):
+
+    SS(term) = trace((H - H_reduced) G), G the Gower-centred distances, H the hat matrix of the full design X and
+    H_reduced that of X without the term's columns; F = (SS / df) / (SS_residual / df_residual).
+    p by permutation under the reduced model (vegan's default model = "reduced"; the distance-based Freedman-Lane
+    scheme): per term the residuals of the reduced model, G_r = (I - H_r) G (I - H_r), are permuted (samples, or
+    within `strata`), and F is recomputed from the permuted G_p with the full model,
+    F_p = (trace(H_d G_p) / df) / (trace((I - H) G_p) / df_residual). With a single term the reduced model is the
+    intercept and this is the classic PERMANOVA.
+
+    X: n x p design with an intercept column; owner: term of each column ('(intercept)' for the intercept).
+    Returns [(term, df, SS, R2, F, p)], (df_res, SS_res), SS_total."""
+    D = np.asarray(D, float)
+    n = D.shape[0]
+    G = gower(D)
+    sst = float(np.trace(G))
+    H = _hat(X)
+    rank = np.linalg.matrix_rank(X)
+    df_res = n - rank
+    tr = lambda M, Gm: float(np.sum(M * Gm))                  # trace(M G) for symmetric M, G
+    ss_res = sst - tr(H, G)
+    if df_res < 1 or sst <= 0 or ss_res <= 0:
+        return [], (df_res, ss_res), sst
+    rng = np.random.default_rng(seed)
+    blocks = None
+    if strata is not None:
+        strata = np.asarray(strata, object)
+        blocks = [np.where(strata == s_)[0] for s_ in sorted(set(strata), key=str)]
+
+    def perm():
+        if blocks is None:
+            return rng.permutation(n)
+        p = np.arange(n)
+        for idx in blocks:
+            p[idx] = idx[rng.permutation(len(idx))]
+        return p
+    perms_ = [perm() for _ in range(perms)]                   # the same permutations for every term
+    out = []
+    for t in [o for o in dict.fromkeys(owner) if o != "(intercept)"]:
+        keep = [j for j, o in enumerate(owner) if o != t]
+        Xr = X[:, keep]
+        df = rank - np.linalg.matrix_rank(Xr)
+        if df < 1:
+            continue
+        Hr = _hat(Xr)
+        Hd = H - Hr
+        ss = tr(Hd, G)
+        F0 = (ss / df) / (ss_res / df_res)
+        R = np.eye(n) - Hr
+        Gr = R @ G @ R
+        Iq = np.eye(n) - H
+        ge = 0
+        for p in perms_:
+            Gp = Gr[np.ix_(p, p)]
+            sp, rp = tr(Hd, Gp), tr(Iq, Gp)
+            ge += rp > 0 and (sp / df) / (rp / df_res) >= F0 - 1e-12
+        out.append((t, df, ss, ss / sst, F0, (ge + 1) / (perms + 1)))
+    return out, (df_res, ss_res), sst
 
 
 # ----------------------------------------------------------------------------- metadata

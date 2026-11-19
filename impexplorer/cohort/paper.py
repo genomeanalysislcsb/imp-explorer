@@ -26,7 +26,7 @@ import numpy as np
 import pandas as pd
 
 from ..release import read_table, table_path
-from .stats import bh, bray_curtis, clr, design_matrix
+from .stats import bh, bray_curtis, clr, design_matrix, jaccard, permanova_margin
 
 try:
     from scipy.special import fdtrc as _fdtrc
@@ -109,44 +109,6 @@ def anova_rows(layer, analysis, feats, n, terms, res, sst):
 
 def hat(X):
     return X @ np.linalg.pinv(X.T @ X) @ X.T
-
-
-def permanova_margin(D, X, owner, perms=999, seed=1):
-    """multivariable PERMANOVA with marginal sums of squares per term (Gower-centred distances, like
-    vegan::adonis2(by = 'margin')); samples permuted. Returns [(term, df, SS, R2, F, p)], (df_res, SS_res), SST."""
-    n = D.shape[0]
-    A = -0.5 * D ** 2
-    J = np.eye(n) - 1.0 / n
-    G = J @ A @ J
-    sst = float(np.trace(G))
-    H = hat(X)
-    rank = np.linalg.matrix_rank(X)
-    df_res = n - rank
-    tr = lambda M, Gm: float(np.sum(M * Gm))           # trace(M G) for symmetric M, G
-    terms = []
-    for t in [o for o in dict.fromkeys(owner) if o != "(intercept)"]:
-        keep = [j for j, o in enumerate(owner) if o != t]
-        Xr = X[:, keep]
-        df = rank - np.linalg.matrix_rank(Xr)
-        if df >= 1:
-            terms.append((t, df, H - hat(Xr)))
-    if not terms or df_res < 1 or sst <= 0:
-        return [], (df_res, float("nan")), sst
-
-    def stats(Gm):
-        res = sst - tr(H, Gm)
-        return res, [tr(Hd, Gm) for _, _, Hd in terms]
-    res, ss = stats(G)
-    F0 = np.array([(s / df) / (res / df_res) for s, (_, df, _) in zip(ss, terms)])
-    rng = np.random.default_rng(seed)
-    ge = np.zeros(len(terms))
-    for _ in range(perms):
-        p = rng.permutation(n)
-        rp, sp = stats(G[np.ix_(p, p)])
-        Fp = np.array([(s / df) / (rp / df_res) for s, (_, df, _) in zip(sp, terms)])
-        ge += Fp >= F0 - 1e-12
-    out = [(t, df, s, s / sst, f, (g + 1) / (perms + 1)) for (t, df, _), s, f, g in zip(terms, ss, F0, ge)]
-    return out, (df_res, res), sst
 
 
 def response(L, transform, prevalence):
@@ -252,20 +214,23 @@ def run(C, a):
                 tt, res, sst = anova(X, owner, Y)
                 an += anova_rows(key, "feature", feats, len(keys), tt, res, sst)
         # beta diversity
+        dists = []
         if L.kind == "counts":
-            R = L.rel().loc[keys].values
-            D, dist = bray_curtis(R), "Bray-Curtis"
+            dists.append((bray_curtis(L.rel().loc[keys].values), "Bray-Curtis"))
         else:
             V = response(L, "clr", 0.0).loc[keys].values
             sq = (V ** 2).sum(axis=1)
             D = np.sqrt(np.maximum(sq[:, None] + sq[None, :] - 2 * V @ V.T, 0))
             np.fill_diagonal(D, 0)
-            dist = "Euclidean (CLR)"
-        out, (df_res, ss_res), sst = permanova_margin(D, X, owner, a.permutations)
-        for t, df, ss, r2, F, p in out:
-            pm.append([key, t, len(keys), dist, df, ss, r2, F, p])
-        if out:
-            pm.append([key, "(residual)", len(keys), dist, df_res, ss_res, ss_res / sst, np.nan, np.nan])
+            dists.append((D, "Euclidean (CLR)"))
+        if L.kind in ("counts", "auc") and getattr(a, "paper_jaccard", True):
+            dists.append((jaccard(L.M.loc[keys].values, binary=True), "Jaccard"))      # who is there, not how much
+        for D, dist in dists:
+            out, (df_res, ss_res), sst = permanova_margin(D, X, owner, a.permutations)
+            for t, df, ss, r2, F, p in out:
+                pm.append([key, t, len(keys), dist, df, ss, r2, F, p])
+            if out:
+                pm.append([key, "(residual)", len(keys), dist, df_res, ss_res, ss_res / sst, np.nan, np.nan])
         C.note("paper model: %s, %d samples, %d features (%.0f s)" % (key, len(keys), Rf.shape[1], time.time() - t0))
     for n_ in notes:
         C.note(n_)
@@ -275,8 +240,8 @@ def run(C, a):
         A.loc[idx, "q"] = bh(A.loc[idx, "p"].values)
     P = pd.DataFrame(pm, columns=["layer", "term", "n", "distance", "df", "ss", "r2", "F", "p"])
     P["q"] = np.nan
-    i = P["term"] != "(residual)"
-    P.loc[i, "q"] = bh(P.loc[i, "p"].values)
+    for _, idx in P[P["term"] != "(residual)"].groupby("distance").groups.items():    # BH per distance
+        P.loc[idx, "q"] = bh(P.loc[idx, "p"].values)
     return {"paper_anova": A, "paper_permanova": P, "paper_variance": variance(A, P, a.sig_q, terms)}
 
 
@@ -292,12 +257,15 @@ def variance(A, P, sig_q, order):
         for t in terms:
             sh = a[(a["analysis"] == "shannon") & (a["term"] == t)]
             fe = a[(a["analysis"] == "feature") & (a["term"] == t)]
-            be = p[p["term"] == t]
+            be = p[(p["term"] == t) & (p["distance"] != "Jaccard")]
+            bj = p[(p["term"] == t) & (p["distance"] == "Jaccard")]
             rows.append({"layer": layer, "term": t,
                          "r2_shannon": sh["r2"].iloc[0] if len(sh) else np.nan,
                          "p_shannon": sh["p"].iloc[0] if len(sh) else np.nan,
                          "r2_beta": be["r2"].iloc[0] if len(be) else np.nan,
                          "p_beta": be["p"].iloc[0] if len(be) else np.nan,
+                         "r2_beta_jaccard": bj["r2"].iloc[0] if len(bj) else np.nan,
+                         "p_beta_jaccard": bj["p"].iloc[0] if len(bj) else np.nan,
                          "r2_features_median": fe["r2"].median() if len(fe) else np.nan,
                          "features": int(len(fe)),
                          "features_q": float((fe["q"] < sig_q).mean()) if len(fe) and t != "(residual)" else np.nan})

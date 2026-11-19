@@ -58,7 +58,13 @@ def layout(data):
                   "samples)."),
         html.Div(style={"height": "16px"}),
         html.Div([
-            card("Beta diversity", graph("tx-pcoa"), note="Bray-Curtis on relative abundances; PERMANOVA by the "
+            card("Beta diversity", html.Div([
+                html.Div([control("distance", dd("tx-dist", [{"label": "Bray-Curtis", "value": "bray"},
+                                                              {"label": "Jaccard (presence / absence)",
+                                                               "value": "jaccard"}], "bray"))],
+                         className="controls"),
+                graph("tx-pcoa")]),
+                 note="Bray-Curtis on relative abundances or Jaccard on presence / absence; PERMANOVA by the "
                  "'group by' variable (499 permutations)"),
             card("Differences between groups", html.Div(id="tx-tests"),
                  note="Kruskal-Wallis (2 groups: Mann-Whitney) per taxon in ≥ 10 % of samples, BH-FDR; click a row "
@@ -85,9 +91,9 @@ def register(app, data):
                   Output("tx-taxon", "options"), Output("tx-taxon", "value"),
                   Input("tx-prof", "value"), Input("tx-top", "value"), Input("tx-view", "value"),
                   Input("tx-hrows", "value"), Input("tx-hcols", "value"), Input("tx-hval", "value"),
-                  Input("tx-hann", "value"),
+                  Input("tx-hann", "value"), Input("tx-dist", "value"),
                   Input(GLOBAL[0], "value"), Input(GLOBAL[1], "value"), Input(GLOBAL[2], "value"), Input(GLOBAL[3], "value"))
-    def _main(prof, top, view, hrows, hcols, hval, hann, group, fcol, fval, qcm=None):
+    def _main(prof, top, view, hrows, hcols, hval, hann, dist, group, fcol, fval, qcm=None):
         if not prof:
             return empty_fig(), empty_fig(), None, [], None
         s, g, cmap = selection(data, group, fcol, fval, qcm, prof.split("|")[1])
@@ -100,7 +106,7 @@ def register(app, data):
                                     annot=annot_series(data, hann, s) if hann != group else None)
         else:
             bar = stacked(M, g, top=int(top or 15))
-        pc = ordination(M, g, cmap)
+        pc = ordination(M, g, cmap, method=dist or "bray")
         t = group_tests(M, g.reindex(M.index).fillna("NA").values) if g.nunique() > 1 else None
         if t is not None and len(t):
             t = t.rename(columns={"feature": "taxon"})

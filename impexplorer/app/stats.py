@@ -1,4 +1,5 @@
-"""Small statistics helpers (numpy / scipy): Bray-Curtis PCoA, group tests with BH-FDR."""
+"""Small statistics helpers (numpy / scipy): Bray-Curtis or Jaccard PCoA, PERMANOVA (marginal, as adonis2),
+group tests with BH-FDR."""
 import numpy as np
 import pandas as pd
 from scipy import stats
@@ -38,29 +39,56 @@ def pcoa(D, k=2):
     return coords, expl[:k]
 
 
-def permanova(D, labels, perms=499, seed=1):
+def jaccard(X, binary=True):
+    """Jaccard distance: presence / absence (default) or quantitative (2 BC / (1 + BC)); see cohort.stats.jaccard"""
+    from ..cohort.stats import jaccard as _j
+    return _j(X, binary)
+
+
+DISTANCES = {"bray": "Bray-Curtis", "jaccard": "Jaccard (presence / absence)"}
+
+
+def distance(X, method="bray"):
+    """samples x features (relative abundances) -> distance matrix: bray (Bray-Curtis) or jaccard"""
+    return bray_curtis(X) if method == "bray" else jaccard(X, binary=True)
+
+
+def permanova_terms(D, data, perms=499, seed=1, strata=None):
+    """multivariable PERMANOVA as vegan::adonis2(by = "margin"): one row per term (marginal SS, R2, F, p from
+    permutations under the reduced model), the residual and the total. data: DataFrame, one column per term
+    (numeric columns as covariates, others as factors), rows in the order of D."""
+    from ..cohort.stats import design_matrix, permanova_margin
+    data = pd.DataFrame(data).reset_index(drop=True)
+    terms = list(data.columns)
+    kinds = {t: "numeric" if pd.api.types.is_numeric_dtype(data[t]) and data[t].nunique() > 2 else "categorical"
+             for t in terms}
+    rows = [{t: (v if kinds[t] == "numeric" else str(v)) for t, v in r.items()} for r in data.to_dict("records")]
+    X, _, owner, _ = design_matrix(rows, terms, kinds)
+    out, (df_res, ss_res), sst = permanova_margin(np.asarray(D, float), X, owner, perms, seed, strata)
+    cols = ["term", "df", "SS", "R2", "F", "p"]
+    if not out:
+        return pd.DataFrame(columns=cols)
+    res = [list(r) for r in out]
+    res.append(["(residual)", df_res, ss_res, ss_res / sst, np.nan, np.nan])
+    res.append(["(total)", D.shape[0] - 1, sst, 1.0, np.nan, np.nan])
+    return pd.DataFrame(res, columns=cols)
+
+
+def permanova(D, labels, perms=499, seed=1, covariates=None):
+    """PERMANOVA of one grouping (labels), optionally adjusted for covariates (DataFrame, rows as D): the group's
+    marginal R2, F and p (reduced-model permutations, as adonis2 by = "margin"). Returns (F, R2, p)."""
     labels = np.asarray(labels)
-    groups = np.unique(labels)
     n = len(labels)
-    if len(groups) < 2 or n <= len(groups):
+    if len(np.unique(labels)) < 2 or n <= len(np.unique(labels)):
         return np.nan, np.nan, np.nan
-    D2 = D ** 2
-
-    def f_stat(lab):
-        sst = D2[np.triu_indices(n, 1)].sum() / n
-        ssw = 0.0
-        for g in groups:
-            i = np.where(lab == g)[0]
-            if len(i) > 1:
-                ssw += D2[np.ix_(i, i)][np.triu_indices(len(i), 1)].sum() / len(i)
-        ssb = sst - ssw
-        return (ssb / (len(groups) - 1)) / (ssw / (n - len(groups))), ssb / sst
-
-    F, r2 = f_stat(labels)
-    rng = np.random.default_rng(seed)
-    ge = sum(f_stat(rng.permutation(labels))[0] >= F for _ in range(perms))
-    return F, r2, (ge + 1) / (perms + 1)
-
+    data = pd.DataFrame({"__group__": labels.astype(str)})
+    if covariates is not None:
+        data = pd.concat([data, pd.DataFrame(covariates).reset_index(drop=True)], axis=1)
+    t = permanova_terms(D, data, perms, seed)
+    r = t[t["term"] == "__group__"]
+    if r.empty:
+        return np.nan, np.nan, np.nan
+    return float(r["F"].iloc[0]), float(r["R2"].iloc[0]), float(r["p"].iloc[0])
 
 def group_tests(M, groups, min_prev=0.1):
     """M: samples x features (relative abundances); groups: labels per sample.

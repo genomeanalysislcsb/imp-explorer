@@ -42,7 +42,8 @@ Choose a profile: Kraken2/Bracken per rank (with the Kraken2 database set in the
 - **Composition**: stacked bars of the top taxa, samples sorted by group and then by the most abundant taxon.
   As a **heatmap**: z-scores of the most variable taxa (in ≥ 10 % of the samples), see
   [clustered heatmaps](#clustered-heatmaps).
-- **Beta diversity**: Bray-Curtis PCoA of the relative abundances; PERMANOVA (499 permutations) by the grouping.
+- **Beta diversity**: PCoA of the relative abundances with Bray-Curtis, or Jaccard on presence / absence (selector);
+  PERMANOVA (499 permutations) by the grouping.
 - **Differences between groups**: Kruskal-Wallis (two groups: Mann-Whitney) per taxon present in ≥ 10 % of the
   samples, Benjamini-Hochberg q, group medians in %.
 - **One taxon**: by group (log scale; samples without the taxon at the bottom line) and metagenome vs
@@ -156,7 +157,7 @@ Shown when the release has the [paper analysis](cohort.md#paper-analysis-paper-m
 --paper-model`, as in Fig. 4 of a paper that partitions variance by covariate:
 
 - **Variance explained per layer and term**: heatmap of the % of variance each term explains given the others, for
-  the measure chosen (beta diversity: PERMANOVA R²; Shannon; median r² over the features; share of features with
+  the measure chosen (beta diversity: PERMANOVA R² with Bray–Curtis / Euclidean or with Jaccard; Shannon; median r² over the features; share of features with
   q below the threshold); `*` p < 0.05.
 - **Terms across layers**: every layer as a point per term, terms sorted by their median over layers.
 - **Unexplained variance**: the residual share per layer.

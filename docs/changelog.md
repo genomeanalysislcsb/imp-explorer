@@ -8,6 +8,14 @@
   (enriched features by default, or all with the column *enriched*) follow it.
 - Intra vs extra page: summary plot drawn; volcano point size = median abundance; p and q shown with 3 significant
   digits. A test checks every `%`-formatted string of the package.
+- **PERMANOVA as `adonis2(by = "margin")`**: one implementation for the app and the paper analysis, with
+  several terms, marginal sums of squares and permutations under the reduced model (per term the residuals of the
+  model without it: distance-based Freedman–Lane, vegan's default). Before, the paper analysis permuted whole samples,
+  which mixes the term with correlated covariates (e.g. group and site); the app tested a single grouping only.
+  `app.stats.permanova_terms` gives the adonis2 table for any terms.
+- **Jaccard distance** (presence / absence; quantitative form as an option) next to Bray-Curtis: selector on the
+  Taxonomy page; additional PERMANOVA rows (`distance` Jaccard) and a Jaccard measure on the Variance page in the
+  paper analysis. Bray-Curtis stays the default everywhere.
 - Labels: the metagenome and metatranscriptome of the main export are called *intracellular* once the release has an
   extracellular fraction (as the protein fractions already were).
 

@@ -11,6 +11,7 @@ from ._common import grid
 from .cohort import layer_label
 
 MEASURES = [("r2_beta", "beta diversity (PERMANOVA R²)", "p_beta"),
+            ("r2_beta_jaccard", "beta diversity, Jaccard presence / absence (PERMANOVA R²)", "p_beta_jaccard"),
             ("r2_shannon", "Shannon diversity (ANOVA r²)", "p_shannon"),
             ("r2_features_median", "features (median r² per feature)", None),
             ("features_q", "features with q < threshold (share)", None)]
@@ -139,6 +140,7 @@ def layout(data):
     sig = st.get("sig_q", 0.1)
     layers = list(dict.fromkeys(data.distinct("cohort_paper_variance", "layer")))
     have_k = sorted({kind_of(x) for x in layers})
+    have_cols = set(data.q("SELECT * FROM cohort_paper_variance LIMIT 1").columns)      # older releases: no Jaccard
     t = terms(data)
     return html.Div([
         html.H2("Variance explained"),
@@ -146,8 +148,8 @@ def layout(data):
                 html.Code(pa.get("model", "")), ". Type II ANOVA per term for Shannon diversity and every feature, "
                 "PERMANOVA with all terms (marginal R²); the share of variance each term explains given the others. "
                 "Samples flagged %s in the layer's QC are left out." % pa.get("qc", "FAIL")], className="lead"),
-        html.Div([control("measure", dd("va-measure", [{"label": lab, "value": m} for m, lab, _ in MEASURES],
-                                        "r2_beta")),
+        html.Div([control("measure", dd("va-measure", [{"label": lab, "value": m} for m, lab, _ in MEASURES
+                                                       if m in have_cols], "r2_beta")),
                   control("layers", dd("va-kinds", [{"label": dict(KINDS).get(k, k), "value": k} for k in have_k],
                                        have_k, multi=True))], className="controls"),
         card("Variance explained per layer and term", graph("va-heat"),

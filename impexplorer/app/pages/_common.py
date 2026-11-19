@@ -99,12 +99,13 @@ def stacked(M, groups, top=15, ytitle="relative abundance", title=None, height=4
     return fig
 
 
-def ordination(M, groups, cmap, title="PCoA (Bray-Curtis)", height=430):
-    from ..stats import bray_curtis, pcoa, permanova
+def ordination(M, groups, cmap, title=None, height=430, method="bray"):
+    from ..stats import DISTANCES, distance, pcoa, permanova
     if M.shape[0] < 3 or M.shape[1] < 2:
         return empty_fig("need at least 3 samples")
+    title = title or "PCoA (%s)" % DISTANCES.get(method, method)
     R = M.div(M.sum(axis=1).replace(0, np.nan), axis=0).fillna(0)
-    D = bray_curtis(R.values)
+    D = distance(R.values, method)
     X, expl = pcoa(D)
     g = groups.reindex(R.index).fillna("NA")
     F, r2, p = permanova(D, g.values) if g.nunique() > 1 else (np.nan, np.nan, np.nan)

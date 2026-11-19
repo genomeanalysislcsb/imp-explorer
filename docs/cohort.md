@@ -192,7 +192,7 @@ imp-explorer cohort --data release_v0.4 \
 |---|---|---|
 | alpha | Shannon and Pielou of the layer ~ model, ANOVA per term | count and protein layers |
 | features | each tested feature ~ model, ANOVA per term, BH per layer and term | count layers: relative abundance (`--paper-transform tss`, default) or CLR (`clr`); proteins and metabolomics: CLR, pseudocount = smallest positive value |
-| beta | PERMANOVA with all terms, marginal sums of squares per term (as `adonis2(by = "margin")`), samples permuted | count layers: Bray–Curtis; proteins and metabolomics: Euclidean distance of CLR values (Aitchison) |
+| beta | PERMANOVA with all terms, marginal sums of squares per term and permutations under the reduced model, as `adonis2(by = "margin")` (vegan's default `model = "reduced"`: per term the residuals of the model without it are permuted, i.e. the distance-based Freedman–Lane test) | count layers: Bray–Curtis; proteins and metabolomics: Euclidean distance of CLR values (Aitchison); in addition, for count and protein layers, Jaccard on presence / absence (who is there, not how much) |
 
 - **ANOVA**: sums of squares of each term given all the others (type II). With main effects only, as here, type II
   and type III give the same values. F test on the residual degrees of freedom; `r2` = SS(term) / SS(total), the
@@ -206,8 +206,9 @@ imp-explorer cohort --data release_v0.4 \
 - Settings file keys: `paper_model`, `paper_transform`, `paper_qc`.
 
 Release tables: `cohort_paper_anova` (layer, analysis = shannon / pielou / feature, feature, term, n, df, ss, r2, F,
-p, q), `cohort_paper_permanova` (layer, term, n, distance, df, ss, r2, F, p, q) and `cohort_paper_variance` (per layer
-and term: r2 and p of Shannon and of the PERMANOVA, median r2 over the features, share of features with q <
+p, q), `cohort_paper_permanova` (layer, term, n, distance, df, ss, r2, F, p, q; BH per distance) and
+`cohort_paper_variance` (per layer and term: r2 and p of Shannon and of the PERMANOVA, Bray–Curtis / Euclidean and
+Jaccard, median r2 over the features, share of features with q <
 `--sig-q`); the same as `stats/cohort.paper_*.tsv`.
 
 ### Agreement between layers (`--concordance`)
