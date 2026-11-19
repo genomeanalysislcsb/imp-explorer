@@ -119,6 +119,13 @@ def main(argv=None):
             a.layers += "," + ",".join(dict.fromkeys(extra))
     C.load_layers(a.layers)
     C.note("layers: " + ", ".join("%s (%d x %d)" % (k, L.M.shape[0], L.M.shape[1]) for k, L in C.layers.items()))
+    if not C.layers:
+        why = C.qc_flags.loc[C.excluded, "reasons"].value_counts().head(3) if C.excluded else None
+        C.note("no layer to analyse: %d of %d samples kept by the sample QC (--qc-drop %s)%s; check the release "
+               "(imp-explorer export) and the metadata" % (
+                   len(C.kept), len(C.samples), a.qc_drop,
+                   "; most frequent reasons: " + "; ".join("%s (%d)" % (r, n) for r, n in why.items())
+                   if why is not None and len(why) else ""))
     A = Analysis(C)
     res = A.run()
     if a.paper_model:

@@ -270,6 +270,8 @@ class Report:
 
     def scatter_grid(self, method, layers, title_fn):
         o = self.res["ordination"]
+        if not len(o) or "method" not in o.columns:   # no layer analysed (e.g. every sample excluded)
+            return None
         o = o[(o["method"] == method) & o["layer"].isin(layers)]
         lays = [k for k in layers if k in set(o["layer"])]
         if not lays:
