@@ -1,1 +1,0 @@
-{"summary": {"sequencing": "paired end (151 cycles + 151 cycles)", "before_filtering": {"total_reads": 28000000, "read1_mean_length": 151, "q30_rate": 0.91, "gc_content": 0.47}, "after_filtering": {"total_reads": 27389264, "read1_mean_length": 148, "q30_rate": 0.93, "gc_content": 0.47}}}
