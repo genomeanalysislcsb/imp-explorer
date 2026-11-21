@@ -821,8 +821,11 @@ def test_paper_model(tmp_path):
     assert variance.terms(d) == ["group", "site", "age", "sex", "depth"]
     vt = variance.table(d, [])
     for m, _, _ in variance.MEASURES:
-        assert len(variance.heatmap(d, vt, m, variance.terms(d)).data) == 1
-        assert len(variance.ranking(vt, m, variance.terms(d)).data) >= 2
+        # a measure without values (e.g. Jaccard on a fixture where every taxon is in every sample) gives an empty
+        # figure
+        want = 1 if vt[vt["term"].isin(variance.terms(d))][m].notna().any() else 0
+        assert len(variance.heatmap(d, vt, m, variance.terms(d)).data) == want
+        assert len(variance.ranking(vt, m, variance.terms(d)).data) >= (2 if want else 0)
     assert len(variance.unexplained(d, vt, "r2_beta").data[0].x) == 4
     s_, hits = variance.sig_features(d, "kraken.genus.mg", "group", 0.1)
     assert set(s_["term"]) == {"group", "site", "age", "sex", "depth"} and len(hits) == 10

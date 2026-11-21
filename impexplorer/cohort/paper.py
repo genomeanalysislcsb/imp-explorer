@@ -226,6 +226,9 @@ def run(C, a):
         if L.kind in ("counts", "auc") and getattr(a, "paper_jaccard", True):
             dists.append((jaccard(L.M.loc[keys].values, binary=True), "Jaccard"))      # who is there, not how much
         for D, dist in dists:
+            if not np.any(D > 0):         # e.g. Jaccard when every feature is in every sample: nothing to explain
+                notes.append("paper model: %s, %s distances all 0, PERMANOVA skipped" % (key, dist))
+                continue
             out, (df_res, ss_res), sst = permanova_margin(D, X, owner, a.permutations)
             for t, df, ss, r2, F, p in out:
                 pm.append([key, t, len(keys), dist, df, ss, r2, F, p])
