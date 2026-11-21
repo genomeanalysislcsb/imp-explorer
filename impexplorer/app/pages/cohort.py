@@ -190,26 +190,39 @@ def feature_box(data, layer, feature, subtitle=""):
                         title="%s · %s%s" % (name, layer_label(data, layer), subtitle), height=420)
 
 
-def volcano(d, x, xtitle, q, title):
+def volcano(d, x, xtitle, q, title, data=None, comp=None):
+    """-log10 p against the effect; with a two-group comparison or model term ('CRC vs HC', 'group: CRC vs HC')
+    significant features are coloured by the group they are higher in (group colours of the app), else red"""
     if d.empty:
         return empty_fig("no results for this selection")
     y = -np.log10(d["p"].clip(lower=1e-300))
     sig = d["q"] < q
+    a, b = term_groups(comp) if comp else (None, None)
+    if a and b and data is not None:
+        gc = gcolors(data)
+        cats = [(~sig, "q ≥ %g" % q, "#b8c2cc"),
+                (sig & (d[x] < 0), "higher in %s" % b, gc.get(b, "#2a6f97")),
+                (sig & (d[x] >= 0), "higher in %s" % a, gc.get(a, "#d1495b"))]
+    else:
+        cats = [(~sig, "q ≥ %g" % q, "#b8c2cc"), (sig, "q < %g" % q, "#d1495b")]
     fig = go.Figure()
-    for flag, name, col in ((False, "q ≥ %g" % q, "#b8c2cc"), (True, "q < %g" % q, "#d1495b")):
-        m = sig == flag
+    for m, name, col in cats:
+        hit = name != cats[0][1]
         fig.add_trace(go.Scattergl(x=d.loc[m, x], y=y[m], mode="markers", name=name,
                                    text=(d.loc[m, "feature"].astype(str) + " " + d.loc[m, "name"].fillna("").astype(str)),
                                    customdata=d.loc[m, "q"],
-                                   marker=dict(size=7 if flag else 5, color=col, opacity=0.85 if flag else 0.5),
+                                   marker=dict(size=7 if hit else 5, color=col, opacity=0.85 if hit else 0.5),
                                    hovertemplate="%{text}<br>" + xtitle + " %{x:.3g}<br>p %{y:.2f} (-log10)"
                                                  "<br>q %{customdata:.3g}<extra></extra>"))
     fig.add_vline(x=0, line=dict(color="#9aa5b1", width=1))
+    if sig.any():                                     # the p at which q crosses the threshold
+        fig.add_hline(y=float(y[sig].min()), line=dict(color="#9aa5b1", width=1, dash="dot"),
+                      annotation_text="q = %g" % q, annotation_position="top left",
+                      annotation_font=dict(size=10, color="#7b8794"))
     fig.update_xaxes(title=xtitle)
     fig.update_yaxes(title="-log10 p")
     fig.update_layout(title=title)
     return style(fig, 420)
-
 
 def table(id_, d, cols, layer):
     cols = [c for c in cols if c in d.columns and d[c].notna().any() and not (d[c].astype(str) == "").all()]
@@ -414,7 +427,8 @@ def register(app, data):
         d = data.q("SELECT * FROM all_tests WHERE layer=? AND comparison=? ORDER BY p", [layer, comp])
         kw = comp == "all groups"
         d["x"] = d["effect"] if kw else d["effect"] - 0.5
-        fig = volcano(d, "x", "H" if kw else "P(a > b) − 0.5", q, "%s · %s" % (layer_label(data, layer), comp))
+        fig = volcano(d, "x", "H" if kw else "P(a > b) − 0.5", q, "%s · %s" % (layer_label(data, layer), comp),
+                      data=data, comp=None if kw else comp)
         cols = ["feature", "name", "medians", "means", "prevalence", "p", "q"] if kw else \
             ["feature", "name", "n_a", "n_b", "median_a", "median_b", "mean_a", "mean_b", "effect", "p", "q"]
         return fig, table("co-t-grid", d, cols, layer)
@@ -469,7 +483,8 @@ def register(app, data):
             return empty_fig(), None
         model = key.split("|", 1)[0]
         d = data.q("SELECT * FROM all_models WHERE model=? AND layer=? AND term=? ORDER BY p", [model, layer, term])
-        fig = volcano(d, "estimate", "estimate", q, "%s · %s · %s" % (model, layer_label(data, layer), term))
+        fig = volcano(d, "estimate", "estimate", q, "%s · %s · %s" % (model, layer_label(data, layer), term),
+                      data=data, comp=term)
         return fig, table("co-m-grid", d, ["feature", "name", "n", "estimate", "se", "p", "q"], layer)
 
     @app.callback(Output("co-m-box", "figure"), Input("co-m-grid", "selectedRows"), Input("co-m-model", "value"),
