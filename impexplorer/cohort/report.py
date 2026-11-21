@@ -111,7 +111,7 @@ class Report:
         self.C, self.A, self.res, self.st, self.out = C, A, res, st, out
         self.sections = []           # (key, title, [items]) items: ("fig", fig) | ("table", caption, df) | ("text", s)
         self.q = st.get("sig_q", 0.1)
-        self.gcol = {g: PALETTE[i % len(PALETTE)] for i, g in enumerate(C.groups or ["all"])}
+        self.gcol = {g: PALETTE[i % len(PALETTE)] for i, g in enumerate(sorted(map(str, C.groups or ["all"])))}  # as in the app
         blocks = sorted({C.block_of(s) for s in C.samples.index})
         self.bmark = {b: MARKERS[i % len(MARKERS)] for i, b in enumerate(blocks)}
 

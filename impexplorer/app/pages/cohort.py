@@ -8,7 +8,7 @@ from dash import Input, Output, State, ctx, dcc, html
 from dash.exceptions import PreventUpdate
 
 from ..links import md
-from ..ui import PALETTE, Page, card, control, dd, empty_fig, graph, style
+from ..ui import Page, card, colors, control, dd, empty_fig, graph, style
 from ._common import box_by_group, grid
 
 
@@ -79,8 +79,10 @@ def ordered(data, table, col):
 
 
 def gcolors(data):
+    """group colours as on every other page (ui.colors: by sorted group name), so a group keeps its colour
+    whatever the group order of the cohort settings"""
     gs = settings(data).get("groups") or srna(data).get("groups") or []
-    return {g: PALETTE[i % len(PALETTE)] for i, g in enumerate(gs)}
+    return colors(gs)
 
 
 def cells(data):
