@@ -239,7 +239,8 @@ def tab_tests(data):
     ])
 
 
-def tab_models(data):
+def model_options(data):
+    """one dropdown option per model: its question (or formula) and the data types; formula as tooltip"""
     ov = data.q("SELECT model, formula, max(note) AS note, max(CASE WHEN layer LIKE 'srna_%' THEN 1 ELSE 0 END) "
                 "AS has_srna, max(CASE WHEN layer LIKE 'srna_%' THEN 0 ELSE 1 END) AS has_imp "
                 "FROM all_models_overview GROUP BY 1, 2")
@@ -254,6 +255,11 @@ def tab_models(data):
     opts = [{"label": "%s · %s · %s" % (r.model, short(r.note if r.note not in (None, "", "nan") else r.formula),
                                         src(r)),
              "title": r.formula, "value": "%s|%s" % (r.model, r.formula)} for r in ov.itertuples()]
+    return opts
+
+
+def tab_models(data):
+    opts = model_options(data)
     return html.Div([
         html.Div([html.Div(control("model", dcc.Dropdown(id="co-m-model", options=opts, clearable=False,
                                                          value=opts[0]["value"] if opts else None, optionHeight=34,
@@ -269,6 +275,74 @@ def tab_models(data):
         card("Feature by group and block", graph("co-m-box"), note="raw values of the release (relative "
              "abundance, share of reads on MAGs, mt/mg ratio); the model itself uses CLR and the covariates"),
     ])
+
+
+def tab_forest(data):
+    """forest plot: estimate and 95 % CI of the top features of one model, layer and term, with the other focus
+    terms of the model (e.g. Adenoma vs HC beside CRC vs HC) for the same features"""
+    return html.Div([
+        html.Div([html.Div(control("model", dcc.Dropdown(id="co-f-model", options=model_options(data),
+                                                         value=(model_options(data) or [{"value": None}])[0]["value"],
+                                                         clearable=False, optionHeight=34, maxHeight=420)),
+                           style={"minWidth": "420px"}),
+                  control("layer", dd("co-f-layer", [], None)),
+                  control("features chosen by", dd("co-f-term", [], None)),
+                  control("show", dd("co-f-n", [{"label": "top %d" % k, "value": k} for k in (10, 15, 20, 30)],
+                                     15)),
+                  control("all focus terms", dd("co-f-all", [{"label": "yes", "value": "yes"},
+                                                             {"label": "only this term", "value": "no"}], "yes"))],
+                 className="controls"),
+        card("Effect sizes", graph("co-f-plot"), note="model estimate ± 1.96 HC3 robust SE (approximate 95 % CI); "
+             "OLS on CLR-transformed abundances (ratio layers: log2 mt/mg), categorical terms vs the reference "
+             "group. Features with q below the threshold of the analysis first, then by p; filled marker: q below "
+             "the threshold for that term."),
+    ])
+
+
+def term_groups(term):
+    """'group: CRC vs HC' -> ('CRC', 'HC'); other terms -> (None, None)"""
+    t = str(term).split(":", 1)[-1].strip()
+    if " vs " in t:
+        a, b = t.split(" vs ", 1)
+        return a.strip(), b.strip()
+    return None, None
+
+
+def forest(data, d, chosen, q, title):
+    """d: model rows (feature, name, term, estimate, se, q) of the features to show; chosen: term that ordered them"""
+    if d.empty:
+        return empty_fig("no results for this selection")
+    gcol = gcolors(data)
+    order = (d[d["term"] == chosen].sort_values("estimate")["feature"].tolist())
+    lab = {r.feature: (str(r.name) if r.name not in (None, "", "nan") and str(r.name) != "nan" else "") for r in
+           d.drop_duplicates("feature").itertuples()}
+    ylab = {f: (f + (" · " + lab[f][:40] if lab[f] else "")) for f in order}
+    terms = [chosen] + [t for t in d["term"].unique() if t != chosen]
+    k = len(terms)
+    fig = go.Figure()
+    for i, t in enumerate(terms):
+        e = d[d["term"] == t].set_index("feature").reindex(order).dropna(subset=["estimate"])
+        if e.empty:
+            continue
+        a, _ = term_groups(t)
+        col = gcol.get(a, "#3d405b") if a else "#3d405b"
+        y = [order.index(f) + (i - (k - 1) / 2) * 0.22 for f in e.index]
+        lo, hi = e["estimate"] - 1.96 * e["se"], e["estimate"] + 1.96 * e["se"]
+        sig = e["q"] < q
+        fig.add_trace(go.Scatter(
+            x=e["estimate"], y=y, mode="markers", name=t.split(":", 1)[-1].strip(),
+            error_x=dict(type="data", symmetric=False, array=hi - e["estimate"], arrayminus=e["estimate"] - lo,
+                         color=col, thickness=1.5, width=0),
+            marker=dict(size=9, color=[col if s else "white" for s in sig], line=dict(color=col, width=1.8)),
+            text=[ylab.get(f, f) for f in e.index], customdata=np.c_[lo, hi, e["q"]],
+            hovertemplate="%{text}<br>estimate %{x:.3g} [%{customdata[0]:.3g}, %{customdata[1]:.3g}]"
+                          "<br>q %{customdata[2]:.3g}<extra>%{fullData.name}</extra>"))
+    fig.add_vline(x=0, line=dict(color="#9aa5b1", width=1, dash="dash"))
+    fig.update_yaxes(tickvals=list(range(len(order))), ticktext=[ylab[f] for f in order], range=[-0.7, len(order) - 0.3],
+                     showgrid=False)
+    fig.update_xaxes(title="estimate (CLR difference vs reference; 95 % CI)", zeroline=False)
+    fig.update_layout(title=title, legend=dict(orientation="h", y=-0.12))
+    return style(fig, max(380, 60 + 30 * len(order)))
 
 
 def tab_beta(data):
@@ -321,6 +395,7 @@ def layout(data):
         dcc.Tabs(id="co-tabs", value="tests", children=[
             dcc.Tab(label="Group comparisons", value="tests", children=tab_tests(data)),
             dcc.Tab(label="Adjusted models", value="models", children=tab_models(data)),
+            dcc.Tab(label="Effect sizes", value="forest", children=tab_forest(data)),
             dcc.Tab(label="Beta diversity", value="beta", children=tab_beta(data)),
             dcc.Tab(label="QC and covariates", value="qc", children=tab_qc(data)),
         ], className="tabs"),
@@ -409,6 +484,47 @@ def register(app, data):
         if top.empty:
             return empty_fig("no features for this selection")
         return feature_box(data, layer, top["feature"].iloc[0], subtitle=" · top hit (click a row for another)")
+
+    # ---------------- effect sizes (forest plot)
+    @app.callback(Output("co-f-layer", "options"), Output("co-f-layer", "value"), Input("co-f-model", "value"))
+    def _flayers(key):
+        if not key:
+            return [], None
+        model, formula = key.split("|", 1)
+        ov = data.q("SELECT layer, n, features_q_focus FROM all_models_overview WHERE model=? AND formula=? "
+                    "AND n > 0", [model, formula])
+        opts = [{"label": "%s (n=%d, %d hits)" % (layer_label(data, r.layer), r.n, r.features_q_focus),
+                 "value": r.layer} for r in ov.itertuples()]
+        best = ov.sort_values("features_q_focus", ascending=False)["layer"].iloc[0] if len(ov) else None
+        return opts, best
+
+    @app.callback(Output("co-f-term", "options"), Output("co-f-term", "value"),
+                  Input("co-f-model", "value"), Input("co-f-layer", "value"))
+    def _fterms(key, layer):
+        if not key or not layer:
+            return [], None
+        t = data.q("SELECT term, bool_or(focus) AS focus, sum(CASE WHEN q < ? THEN 1 ELSE 0 END) AS hits "
+                   "FROM all_models WHERE model=? AND layer=? GROUP BY 1", [q, key.split("|", 1)[0], layer])
+        t = t.sort_values(["focus", "hits"], ascending=False)   # default: the focus term with the most hits
+        opts = [{"label": ("★ " if f else "") + x, "value": x} for x, f in zip(t["term"], t["focus"])]
+        return opts, (t["term"].iloc[0] if len(t) else None)
+
+    @app.callback(Output("co-f-plot", "figure"), Input("co-f-model", "value"), Input("co-f-layer", "value"),
+                  Input("co-f-term", "value"), Input("co-f-n", "value"), Input("co-f-all", "value"))
+    def _forest(key, layer, term, n, allterms):
+        if not (key and layer and term):
+            return empty_fig("choose a model, layer and term")
+        model = key.split("|", 1)[0]
+        top = data.q("SELECT feature FROM all_models WHERE model=? AND layer=? AND term=? AND estimate IS NOT NULL "
+                     "ORDER BY (q < ?) DESC, p NULLS LAST LIMIT ?", [model, layer, term, q, int(n or 15)])
+        if top.empty:
+            return empty_fig("no features for this selection")
+        feats = top["feature"].tolist()
+        ph = ",".join("?" * len(feats))
+        cond = "term=?" if allterms == "no" else "(term=? OR focus)"
+        d = data.q("SELECT feature, name, term, estimate, se, q FROM all_models WHERE model=? AND layer=? AND %s "
+                   "AND feature IN (%s)" % (cond, ph), [model, layer, term] + feats)
+        return forest(data, d, term, q, "%s · %s · features by %s" % (model, layer_label(data, layer), term))
 
     # ---------------- beta diversity
     @app.callback(Output("co-b-ord", "figure"), Output("co-b-perm", "children"), Output("co-b-disp", "children"),
