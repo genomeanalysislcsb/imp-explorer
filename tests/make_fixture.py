@@ -42,6 +42,48 @@ def kreport(rows):
     return "".join("%.2f\t%d\t%d\t%s\t%s\t%s\n" % r for r in rows)
 
 
+# KEGG module definitions of the fixture (tests: imp-explorer modules --definitions)
+MODULE_DEFS = {"M00001": ("Glycolysis (fixture)", "K00844 K01810 (K00850,K16370) K01623"),
+               "M00002": ("Glycolysis core (fixture)", "K01803 (K00134,K00150) K00927"),
+               "M00003": ("Complex test (fixture)", "K01596+K03841 K00001")}
+
+
+def mantis_fixture(b, sid, contigs, c2b, gen):
+    """Mantis -km outputs (kegg_modules, sample_kos) and the annotation GFF: genera with an even index carry
+    glycolysis (M00001), all carry M00002 and the complex of M00003 (never K00001); unbinned contigs carry K00150"""
+    gk, gff = [], ["##gff-version 3\n"]
+    binned = dict(c2b)
+    n = 0
+    for name, L in contigs[:300]:
+        bn = binned.get(name)
+        if bn is None:
+            kos = ["K00150"]
+        else:
+            k = int(bn.split(".")[1])
+            kos = ["K01803", "K00134", "K00927", "K01596", "K03841"]
+            if GENERA.index(gen[k]) % 2 == 0:
+                kos += ["K00844", "K01810", "K16370", "K01623"]
+        for ko in kos:
+            n += 1
+            gid = "FIX%s_%05d" % (sid.upper(), n)
+            gk.append("mantis@%s\t%s\n" % (gid, ko))
+            gff.append("%s\tBakta\tCDS\t%d\t%d\t.\t+\t0\tID=%s;Name=x;kegg_ko=%s\n" % (name, 1 + 10 * n % 400,
+                                                                                         300 + 10 * n % 400, gid, ko))
+        n += 1
+        gk.append("mantis@FIX%s_%05d\tNA\n" % (sid.upper(), n))
+    present = {x.split("\t")[1].strip() for x in gk}
+    full1 = {"K00844", "K01810", "K01623"} <= present and bool({"K00850", "K16370"} & present)
+    rows = ["M00001\t%s\t%s\t%s\tNA\n" % (MODULE_DEFS["M00001"][0], "1.0" if full1 else "0",
+                                            "K00844,K01623,K01810,K16370" if full1 else "NA"),
+            "M00002\t%s\t1.0\tK00134,K00927,K01803\tNA\n" % MODULE_DEFS["M00002"][0],
+            "M00003\t%s\t0.667\tK01596,K03841\tK00001\n" % MODULE_DEFS["M00003"][0]]
+    md = os.path.join(b, "Analysis", "annotation", "intermediary", "mantis")
+    w(os.path.join(md, "kegg_modules.tsv.gz"), "Module_ID\tModule_name\tCompleteness_score_mantis\tKOs_mantis\t"
+      "Missing_KOs_mantis\n" + "".join(rows))
+    w(os.path.join(md, "sample_kos.tsv.gz"), "Sample\tKOs\n" + "".join(gk))
+    w(os.path.join(b, "Analysis", "annotation", "annotation_CDS_RNA_hmms.gff"), "".join(gff))
+
+
 def make_sample(root, sid, group, rng, old_bracken, folder=None):
     b = os.path.join(root, folder or sid)
     shift = {"control": 1.0, "case_a": 1.8, "case_b": 0.6}[group]
@@ -75,6 +117,7 @@ def make_sample(root, sid, group, rng, old_bracken, folder=None):
         for c in contigs[k * 30:(k + 1) * 30]:
             c2b.append((c[0], "bin.%d" % k))
     w(os.path.join(b, "Binning", "MetaWrap", "bins.contigs"), "".join("%s\t%s\n" % x for x in c2b))
+    mantis_fixture(b, sid, contigs, c2b, gen)
     head = ["Bin", "Completeness", "Contamination", "Contig_N50", "Genome_Size", "GC_Content", "classification",
             "closest_genome_reference", "closest_genome_reference_radius", "closest_genome_taxonomy",
             "closest_genome_ani", "closest_genome_af"]

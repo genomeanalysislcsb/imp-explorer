@@ -18,6 +18,7 @@ SRNA_TABLES = ("srna_samples", "srna_qc", "srna_features", "srna_tests", "srna_m
                "srna_permanova", "srna_dispersion", "srna_ordination", "srna_covariates")   # 'imp-explorer srna'
 PROT_TABLES = ("prot_taxonomy", "prot_functions", "prot_samples", "prot_proteins", "prot_abundance")  # 'proteomics'
 METAB_TABLES = ("metab_assays", "metab_features", "metab_values", "metab_samples")    # 'imp-explorer metabolomics'
+MODULE_TABLES = ("modules", "module_info")                                             # 'imp-explorer modules'
 QC_TABLES = ("sample_qc",)                                                            # 'imp-explorer qc'
 # views over the cohort results of IMP3 and of sRNA-IMP (same columns where they mean the same)
 UNION_VIEWS = {"all_tests": ("cohort_tests", "srna_tests"), "all_models": ("cohort_models", "srna_models"),
@@ -35,7 +36,7 @@ class Data:
         self.study = self.manifest.get("study") or os.path.basename(self.release)
         self._local = threading.local()
         self.tables = {}
-        for name in (tuple(CORE_TABLES) + COHORT_TABLES + SRNA_TABLES + METAB_TABLES + PROT_TABLES + QC_TABLES
+        for name in (tuple(CORE_TABLES) + COHORT_TABLES + SRNA_TABLES + METAB_TABLES + PROT_TABLES + QC_TABLES + MODULE_TABLES
                      + tuple(extra_tables)):
             p = table_path(self.release, name)
             if p:

@@ -1,5 +1,14 @@
 # Changelog
 
+## unreleased
+
+- **KEGG modules** (`imp-explorer modules`, page *Modules*): community completeness of every KEGG module from
+  Mantis (`kegg_modules.tsv`) and the same score for each MAG from the KOs of its genes (Mantis `sample_kos.tsv`,
+  gene → contig from the annotation GFF, contig → bin); module definitions downloaded from KEGG REST
+  (`--download`). The page shows the most variable modules, group tests, which taxa carry a module in which sample,
+  and the module profiles of the taxa across the cohort (share of their MAGs with the module). Tables `modules` and
+  `module_info`. First step of the network module.
+
 ## 0.5.0 (2026-11)
 
 Effect sizes and group colours on the Cohort page, and exports of IMP3 3.0 runs; the release used in the IMP3 /

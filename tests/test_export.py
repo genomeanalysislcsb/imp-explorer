@@ -1151,3 +1151,77 @@ def test_permanova_margin_vegan():
     Jq = jaccard(P, binary=False)
     bc = np.abs(P[0] - P[1]).sum() / (P[0] + P[1]).sum()
     assert abs(Jq[0, 1] - 2 * bc / (1 + bc)) < 1e-12
+
+
+def test_kegg_module_scores():
+    from impexplorer import modules as M
+    t = M.parse("(K00844,K12407) (K01810,K06859) K01803 ((K00134,K00150) K00927,K11389)")
+    assert M.score(t, {"K00844", "K01810", "K01803", "K00134", "K00927"})[0] == 1.0
+    assert M.score(t, {"K00844", "K01810", "K01803", "K11389"})[0] == 1.0          # the shorter alternative
+    r = M.score(t, {"K00844", "K01810", "K01803", "K00134"})
+    assert abs(r[0] - 0.8) < 1e-9 and r[2] == {"K00927"}
+    r = M.score(M.parse("K00036 (K01057,K07404) K01690 (K01625,K17463)"), {"K00036", "K01057", "K01625"})
+    assert abs(r[0] - 0.75) < 1e-9 and r[2] == {"K01690"}                           # as Mantis' M00008
+    t = M.parse("K00001+K00002-K00003 -K00004+K00005 (K00006,--) M00002")
+    assert t == ("and", [("and", [("ko", "K00001"), ("ko", "K00002")]), ("ko", "K00005"),
+                         ("or", [("ko", "K00006"), ("none",)]), ("mod", "M00002")])
+    res = M.score_all({"M00001": M.parse("K00001 M00002"), "M00002": M.parse("K00002+K00003")},
+                      {"K00001", "K00002", "K00003"})
+    assert res["M00001"][0] == 1.0 and "M00002" in res["M00001"][1]
+
+
+def test_modules_layer(tmp_path):
+    from impexplorer.cli import main as cli
+    root, _ = build(tmp_path / "fx")
+    rel = tmp_path / "rel"
+    assert cli(["export", "--imp-root", str(root), "--out", str(rel), "--format", "tsv", "--threads", "1"]) == 0
+    defs = tmp_path / "defs.tsv"
+    defs.write_text("module\tname\tclass\tdefinition\n" + "".join(
+        "%s\t%s\tfixture\t%s\n" % (m, n, d) for m, (n, d) in make_fixture.MODULE_DEFS.items()))
+    assert cli(["modules", "--release", str(rel), "--imp-root", str(root), "--definitions", str(defs),
+                "--format", "tsv", "--threads", "1"]) == 0
+    m = read_table(str(rel), "modules")
+    com = m[m["scope"] == "community"]
+    assert set(com["module"]) == {"M00001", "M00002", "M00003"}
+    mag = m[m["scope"] == "bin"]
+    bins = read_table(str(rel), "bins")
+    assert set(mag["bin_id"]) <= set(bins["bin_id"]) and len(set(mag["bin_id"])) == len(bins)
+    gl = mag.merge(bins[["bin_id", "genus"]], on="bin_id")
+    even = {g[0] for i, g in enumerate(make_fixture.GENERA) if i % 2 == 0}
+    m1 = gl[gl["module"] == "M00001"]
+    assert set(m1.loc[m1["completeness"] == 1.0, "genus"]) <= even
+    assert (gl.loc[gl["module"] == "M00002", "completeness"] == 1.0).all()           # K00134 path, not K00150
+    m3 = gl[gl["module"] == "M00003"]
+    assert ((m3["completeness"] - 2 / 3).abs() < 0.01).all() and (m3["missing"] == "K00001").all()
+    info = read_table(str(rel), "module_info")
+    assert set(info["module"]) == {"M00001", "M00002", "M00003"} and (info["class"] == "fixture").all()
+    assert "modules" in read_manifest(str(rel))["tables"]
+    # the app page: layout and callbacks run on the release (skipped without dash)
+    try:
+        import dash  # noqa: F401
+        import duckdb  # noqa: F401
+    except ImportError:
+        return
+    from impexplorer.app import create_app
+    from impexplorer.app.pages import modules as page
+    app = create_app(str(rel))
+    assert "Modules" in [p.name for p in app._imp_pages]
+
+    class Fake:
+        fns = {}
+
+        def callback(self, *outs, **kw):
+            def deco(f):
+                o = outs[0]
+                self.fns["%s.%s" % (o.component_id, o.component_property)] = f
+                return f
+            return deco
+    fk = Fake()
+    page.register(fk, app._imp_data)
+    assert page.layout(app._imp_data) is not None
+    heat, tests, opts, first = fk.fns["mo-heat.figure"](0.25, "", "", [])
+    assert first in {"M00001", "M00002", "M00003"} and len(opts) == 3
+    box, carriers = fk.fns["mo-box.figure"]("M00001", "genus", ["high", "medium", "low"], 1.0, "", "", [])
+    assert len(carriers.data) == 1 and carriers.data[0].z is not None
+    sp = fk.fns["mo-species.figure"]("genus", ["high", "medium", "low"], 1.0, "", [])
+    assert len(sp.data) == 1

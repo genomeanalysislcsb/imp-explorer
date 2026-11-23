@@ -45,6 +45,18 @@ TABLES = {
         "keys": ["sample_id", "omic", "db", "feature"],
         "columns": ["sample_id", "omic", "db", "feature", "reads"],
     },
+    "modules": {
+        "doc": "KEGG module completeness per sample: of the community (scope community; Mantis, all genes of the "
+               "sample) and of each MAG (scope bin; same score on the KOs of the bin's genes, 'imp-explorer modules "
+               "--definitions'): best path through the module, share of its KOs present; KOs present and missing",
+        "keys": ["sample_id", "scope", "bin_id", "module"],
+        "columns": ["sample_id", "scope", "bin_id", "module", "completeness", "kos", "missing"],
+    },
+    "module_info": {
+        "doc": "KEGG modules: name, class and definition (from KEGG REST or Mantis' names)",
+        "keys": ["module"],
+        "columns": ["module", "name", "class", "definition"],
+    },
     "sample_qc": {
         "doc": "QC status per sample and layer (mg, mt, srna_<fraction>, mp_<fraction>, metab.<assay>): PASS, WARN, "
                "FAIL or missing, reasons and source (auto, srna, manual); written by 'imp-explorer qc'",

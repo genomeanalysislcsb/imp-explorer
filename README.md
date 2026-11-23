@@ -67,6 +67,7 @@ start it on a node and open it through an SSH tunnel (`ssh -L 8050:<node>:8050 <
 | Taxonomy | Kraken2/Bracken or mOTUs per omic and rank (and the metaproteome, with an across-omics view of one taxon): composition (stacked bars or clustered heatmap), Bray-Curtis PCoA + PERMANOVA, group tests (Kruskal-Wallis / Mann-Whitney, BH-FDR), one taxon by group and mg vs mt |
 | MAGs | CheckM2 quality, GTDB taxonomy of the MAGs, abundance (mg) and activity (mt) of a taxon's MAGs by group, log2(mt/mg) per MAG, MAG catalogue |
 | Functions | KEGG KO / module / pathway, CAZy, EC per omic (mg, mt and the metaproteome fractions): clustered heatmap of the most variable terms (rows / samples clustered, CLR or log, site colour bar), group tests, one term by group, expression ratio mt/mg |
+| Modules | KEGG module completeness (optional, `imp-explorer modules`): most variable modules of the community, group tests, one module by group and the MAGs (taxa) that carry it in each sample, module profiles of the taxa across the cohort (core and accessory modules) |
 | Search | one name across all layers (Kraken2, mOTUs, MAGs, functions, proteins, sRNA, metabolites) by group |
 | sRNA | sRNA-IMP results (optional): composition per fraction, QC, RNA classes, one feature next to mg and mt |
 | Proteomics | metaproteomics (optional, `imp-explorer proteomics`): library QC, which genera make the proteins of a KEGG term, a genus's main KEGG terms, the proteins of a term |
@@ -83,6 +84,20 @@ The top bar sets the grouping variable (any metadata column with 2–12 values) 
 `--plugin my_portal.pages` (or the entry-point group `impexplorer.pages`); extra release tables with `--table name`.
 A page only appears when its tables are in the release, so e.g. the sRNA, Proteomics and Metabolomics pages show up only for studies with these data.
 
+## KEGG modules of the community and the MAGs
+
+```bash
+imp-explorer modules --download kegg_module_definitions.tsv      # once, on a machine that reaches rest.kegg.jp
+imp-explorer modules --release <release> --imp-root <IMP3 root> --definitions kegg_module_definitions.tsv --threads 8
+```
+
+Mantis (IMP3, `-km`) scores every KEGG module on all genes of a sample. With the module definitions, the same score
+is computed on the KOs of each MAG's genes: the path through the definition with the highest share of KOs present,
+completeness = present / (present + missing) KOs of that path; optional subunits are ignored and a sub-module
+counts as one unit. The export log reports for how many modules this score on the whole sample equals Mantis'.
+Without `--definitions` only the community completeness is added. The KEGG module definitions are downloaded from
+KEGG's REST service and are subject to KEGG's terms of use; they are not distributed with imp-explorer.
+
 ## Release tables
 
 | table | rows | content |
@@ -93,6 +108,8 @@ A page only appears when its tables are in the release, so e.g. the sRNA, Proteo
 | `bins` | bin | CheckM2 completeness / contamination, MIMAG tier, N50, size, GC, GTDB-Tk ranks, closest reference, GRiD |
 | `bin_abundance` | sample × bin × omic | reads on the bin's contigs, mean depth, share of mapped reads, RPKM |
 | `functions` | sample × omic × db × feature | featureCounts on the Mantis annotation (default kegg_ko, kegg_module, kegg_pathway, cazy, enzyme_ec) |
+| `modules` | sample × scope × bin × module | (optional, `imp-explorer modules`) KEGG module completeness of the community (Mantis) and of each MAG: best path through the definition, KOs present and missing |
+| `module_info` | module | (optional) name, class and definition of the KEGG modules |
 | `cohort_*` | (optional) | results of `imp-explorer cohort`: tests, models, PERMANOVA, ordination, QC, covariates (see the docs) |
 
 Keys: `sample_id`, `omic`, feature (`taxon` + `rank`, `bin_id`, `feature` + `db`). Study layers (sRNA, proteomics,
@@ -107,6 +124,7 @@ metabolomics, immune) add tables with the same keys.
 | bins | `Stats/all_bin_stats.tsv` (or `Stats/mgmt/mgmt.bins.tsv`) |
 | bin_abundance | `Binning/MetaWrap/bins.contigs`, `Stats/{omic}/mgmt.assembly.contig_read_count.txt`, `…contig_depth.txt` |
 | functions | `Analysis/annotation/{omic}.mantis.{db}.counts.tsv` |
+| modules | `Analysis/annotation/intermediary/mantis/kegg_modules.tsv`, `…/sample_kos.tsv`, `Analysis/annotation/annotation_CDS_RNA_hmms.gff` (gene → contig), `Binning/MetaWrap/bins.contigs` |
 
 All files may be gzipped; missing files give empty tables (partly finished samples still load).
 
