@@ -1,7 +1,20 @@
 # Changelog
 
-## Unreleased
+## 0.5.0 (2026-11)
 
+Effect sizes and group colours on the Cohort page, and exports of IMP3 3.0 runs; the release used in the IMP3 /
+IMP-explorer technical note.
+
+- **Effect sizes tab** on the Cohort page: forest plot of the covariate-adjusted models per layer and term (estimate
+  ± 1.96 HC3 standard errors), the groups of the focus term side by side in their group colours; filled markers for
+  q below the threshold.
+- **Volcano plots** of the Cohort page: significant features coloured by the group they are higher in; dotted line at
+  the q threshold.
+- **Group colours** on the Cohort page and in the report follow the sorted group names, as on every other page.
+- export: IMP3 3.0 runs without `read_stats.tsv`: trimmed pairs from `all_stats` (also without header), raw pairs and
+  read quality from fastp's JSON; omic detected from the fastp report.
+- cohort: a report without ordination (no analysed layer) no longer fails and says why no layer was analysed.
+- Paper model: a PERMANOVA whose distances are all 0 is skipped; `test_paper_model` accepts measures without values.
 - **Intra vs extra: effect-size threshold** (`cohort --fraction-min-r`, default 0.5; selector on the page): a
   feature counts as enriched with q < `--sig-q` and |rank-biserial r| ≥ the minimum, since with ~180 paired samples
   almost any shift is significant. The page's summary, volcano (dotted lines), strongest differences and table
