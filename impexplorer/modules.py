@@ -7,8 +7,13 @@ for the genes of each MAG (gene -> contig from Analysis/annotation/annotation_CD
 Binning/MetaWrap/bins.contigs).
 
 Score (as Mantis): the path through the module definition with the highest share of its KOs present; completeness =
-present / (present + missing) KOs of that path. Optional components (-K...) are ignored, a sub-module (M...) counts
-as one unit, present when it is complete.
+present / (present + missing) KOs of that path. Optional components (-K...) and steps without a KO (--) are ignored,
+a sub-module (M...) counts as one unit, present when it is complete.
+
+With definitions, the community is scored the same way on the KOs of all genes of the sample (source kegg), so
+community and MAGs use the same, current module definitions; Mantis' own scores use the definitions of its
+installation (often older) and are only used without --definitions (source mantis). The log reports for how many
+modules both agree.
 
   imp-explorer modules --download kegg_module_definitions.tsv          # once, where rest.kegg.jp is reachable
   imp-explorer modules --release REL [--imp-root ROOT] [--definitions kegg_module_definitions.tsv] [--threads 8]
@@ -29,7 +34,7 @@ from .readers import imp3
 MANTIS_DIR = "Analysis/annotation/intermediary/mantis"
 GFF = "Analysis/annotation/annotation_CDS_RNA_hmms.gff"
 KEGG_REST = "https://rest.kegg.jp"
-COLUMNS = ["sample_id", "scope", "bin_id", "module", "completeness", "kos", "missing"]
+COLUMNS = ["sample_id", "scope", "bin_id", "module", "completeness", "kos", "missing", "source"]
 INFO_COLUMNS = ["module", "name", "class", "definition"]
 
 
@@ -229,38 +234,41 @@ def sample_rows(base, sample, trees=None):
     mm = mantis_modules(base)
     info = mm[["module", "name"]].copy()
     rows = []
-    if len(mm):
+    if not len(mm):
+        notes.append("modules: no Mantis kegg_modules.tsv")
+    gk = gene_kos(base) if trees else {}
+    if trees and not gk:
+        notes.append("modules: no Mantis sample_kos.tsv: Mantis' community scores only, no MAG modules")
+    if len(mm) and not gk:
         x = mm[mm["completeness"] > 0]
         rows.append(pd.DataFrame({"sample_id": sample, "scope": "community", "bin_id": "", "module": x["module"],
-                                  "completeness": x["completeness"], "kos": x["kos"], "missing": x["missing"]}))
-    else:
-        notes.append("modules: no Mantis kegg_modules.tsv")
-    if trees:
-        gk = gene_kos(base)
-        if not gk:
-            notes.append("modules: no Mantis sample_kos.tsv, no MAG modules")
-        else:
-            g2c = gene_contigs(base, set(gk))
-            c2b = imp3.contig2bin(base)
-            per_bin = {}
-            for g, ks in gk.items():
-                b = c2b.get(g2c.get(g))
-                if b is not None:
-                    per_bin.setdefault(b, set()).update(ks)
-            if len(mm):                                 # the same score on the whole catalogue, against Mantis
-                allk = set().union(*gk.values())
-                own = score_all(trees, allk)
-                cmp = mm.set_index("module")["completeness"]
-                both = [m for m in cmp.index if m in own]
-                agree = sum(abs(own[m][0] - cmp[m]) < 0.01 for m in both)
-                notes.append("modules: community score = Mantis for %d of %d modules" % (agree, len(both)))
-            for b, ks in sorted(per_bin.items()):
-                res = score_all(trees, ks)
-                rows.append(pd.DataFrame([(sample, "bin", sample + ":" + b, m, round(r[0], 3),
-                                           " ".join(sorted(r[1])), " ".join(sorted(r[2])))
-                                          for m, r in res.items() if r[0] > 0], columns=COLUMNS))
-            notes.append("modules: %d genes with KOs, %d on binned contigs, %d bins"
-                         % (len(gk), sum(c2b.get(g2c.get(g)) is not None for g in gk), len(per_bin)))
+                                  "completeness": x["completeness"], "kos": x["kos"], "missing": x["missing"],
+                                  "source": "mantis"}))
+    if gk:
+        g2c = gene_contigs(base, set(gk))
+        c2b = imp3.contig2bin(base)
+        per_bin = {}
+        for g, ks in gk.items():
+            b = c2b.get(g2c.get(g))
+            if b is not None:
+                per_bin.setdefault(b, set()).update(ks)
+        own = score_all(trees, set().union(*gk.values()))
+        rows.append(pd.DataFrame([(sample, "community", "", m, round(r[0], 3), " ".join(sorted(r[1])),
+                                   " ".join(sorted(r[2])), "kegg") for m, r in own.items() if r[0] > 0],
+                                 columns=COLUMNS))
+        if len(mm):
+            cmp = mm.set_index("module")["completeness"]
+            both = [m for m in cmp.index if m in own]
+            agree = sum(abs(own[m][0] - cmp[m]) < 0.01 for m in both)
+            notes.append("modules: community score = Mantis for %d of %d modules"
+                         % (agree, len(both)))
+        for b, ks in sorted(per_bin.items()):
+            res = score_all(trees, ks)
+            rows.append(pd.DataFrame([(sample, "bin", sample + ":" + b, m, round(r[0], 3),
+                                       " ".join(sorted(r[1])), " ".join(sorted(r[2])), "kegg")
+                                      for m, r in res.items() if r[0] > 0], columns=COLUMNS))
+        notes.append("modules: %d genes with KOs, %d on binned contigs, %d bins"
+                     % (len(gk), sum(c2b.get(g2c.get(g)) is not None for g in gk), len(per_bin)))
     df = pd.concat(rows, ignore_index=True) if rows else pd.DataFrame(columns=COLUMNS)
     return df[COLUMNS], info, notes
 

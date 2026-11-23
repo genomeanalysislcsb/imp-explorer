@@ -57,8 +57,9 @@ def layout(data):
         if data.has("modules") else False
     return html.Div([
         html.H2("KEGG modules"),
-        html.P("Completeness of the KEGG modules: of the community (all genes of the sample, Mantis) and of each MAG "
-               "(the same score on the KOs of the MAG's genes). Completeness = share of the KOs present on the best "
+        html.P("Completeness of the KEGG modules: of the community (all genes of the sample) and of each MAG "
+               "(the KOs of the MAG's genes), both with the same, current KEGG module definitions (without them: "
+               "Mantis' community scores). Completeness = share of the KOs present on the best "
                "path through the module's definition. A MAG's module can be incomplete because the MAG is "
                "incomplete: compare with its CheckM2 completeness.", className="lead"),
         html.Div([control("MAG quality", dd("mo-tier", ["high", "medium", "low"], ["high", "medium"], multi=True)),

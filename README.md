@@ -94,8 +94,11 @@ imp-explorer modules --release <release> --imp-root <IMP3 root> --definitions ke
 Mantis (IMP3, `-km`) scores every KEGG module on all genes of a sample. With the module definitions, the same score
 is computed on the KOs of each MAG's genes: the path through the definition with the highest share of KOs present,
 completeness = present / (present + missing) KOs of that path; optional subunits are ignored and a sub-module
-counts as one unit. The export log reports for how many modules this score on the whole sample equals Mantis'.
-Without `--definitions` only the community completeness is added. The KEGG module definitions are downloaded from
+counts as one unit; steps without a KO (`--`) are ignored. The community is scored the same way on the KOs of all
+genes of the sample, so community and MAGs use the same, current definitions (column `source` = `kegg`). Mantis'
+own scores use the module definitions of its installation, which are often older: the log reports for how many
+modules both agree (about 88–90 % of 392 modules for IMP3 3.0.2 runs; the rest are modules KEGG has changed since).
+Without `--definitions` only Mantis' community completeness is added (`source` = `mantis`). The KEGG module definitions are downloaded from
 KEGG's REST service and are subject to KEGG's terms of use; they are not distributed with imp-explorer.
 
 ## Release tables

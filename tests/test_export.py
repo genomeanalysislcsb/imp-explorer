@@ -1182,7 +1182,7 @@ def test_modules_layer(tmp_path):
                 "--format", "tsv", "--threads", "1"]) == 0
     m = read_table(str(rel), "modules")
     com = m[m["scope"] == "community"]
-    assert set(com["module"]) == {"M00001", "M00002", "M00003"}
+    assert set(com["module"]) == {"M00001", "M00002", "M00003"} and (m["source"] == "kegg").all()
     mag = m[m["scope"] == "bin"]
     bins = read_table(str(rel), "bins")
     assert set(mag["bin_id"]) <= set(bins["bin_id"]) and len(set(mag["bin_id"])) == len(bins)
@@ -1196,6 +1196,12 @@ def test_modules_layer(tmp_path):
     info = read_table(str(rel), "module_info")
     assert set(info["module"]) == {"M00001", "M00002", "M00003"} and (info["class"] == "fixture").all()
     assert "modules" in read_manifest(str(rel))["tables"]
+    # without definitions: Mantis' community scores
+    assert cli(["modules", "--release", str(rel), "--imp-root", str(root), "--format", "tsv", "--threads", "1"]) == 0
+    m0 = read_table(str(rel), "modules")
+    assert (m0["scope"] == "community").all() and (m0["source"] == "mantis").all()
+    assert cli(["modules", "--release", str(rel), "--imp-root", str(root), "--definitions", str(defs),
+                "--format", "tsv", "--threads", "1"]) == 0
     # the app page: layout and callbacks run on the release (skipped without dash)
     try:
         import dash  # noqa: F401

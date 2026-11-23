@@ -46,11 +46,12 @@ TABLES = {
         "columns": ["sample_id", "omic", "db", "feature", "reads"],
     },
     "modules": {
-        "doc": "KEGG module completeness per sample: of the community (scope community; Mantis, all genes of the "
-               "sample) and of each MAG (scope bin; same score on the KOs of the bin's genes, 'imp-explorer modules "
-               "--definitions'): best path through the module, share of its KOs present; KOs present and missing",
+        "doc": "KEGG module completeness per sample: of the community (scope community: all genes of the sample) and "
+               "of each MAG (scope bin: the KOs of the bin's genes); best path through the module, share of its KOs "
+               "present; KOs present and missing; source kegg (current KEGG definitions, 'imp-explorer modules "
+               "--definitions') or mantis (Mantis' scores, community only)",
         "keys": ["sample_id", "scope", "bin_id", "module"],
-        "columns": ["sample_id", "scope", "bin_id", "module", "completeness", "kos", "missing"],
+        "columns": ["sample_id", "scope", "bin_id", "module", "completeness", "kos", "missing", "source"],
     },
     "module_info": {
         "doc": "KEGG modules: name, class and definition (from KEGG REST or Mantis' names)",
