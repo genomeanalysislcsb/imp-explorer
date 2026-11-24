@@ -7,7 +7,14 @@
   gene → contig from the annotation GFF, contig → bin); module definitions downloaded from KEGG REST
   (`--download`). The page shows the most variable modules, group tests, which taxa carry a module in which sample,
   and the module profiles of the taxa across the cohort (share of their MAGs with the module). Tables `modules` and
-  `module_info`. First step of the network module.
+  `module_info`. First step of the network module. With definitions, the community is scored with the same
+  current KEGG definitions as the MAGs (`source` kegg); Mantis' own scores (older definitions of its installation,
+  about 10 % of the modules differ) are used only without them (`source` mantis).
+- **Metabolic networks** (`imp-explorer networks`, page *Networks*): results of
+  [IMP-metabolic](https://github.com/genomeanalysislcsb/IMP-metabolic) in the release (`met_topology`, `met_hubs`,
+  `met_mag_coverage`, `met_pan_summary`, `met_community_reactions`, `met_reactions`): network properties of the
+  communities by group with tests, MAG coverage, reactions present more often in one group (with equations and
+  ECs), pan-reactomes per rank (core share vs number of MAGs), hub metabolites; for the specific or all reactions.
 
 ## 0.5.0 (2026-11)
 

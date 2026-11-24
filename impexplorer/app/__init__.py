@@ -20,10 +20,11 @@ def nav_id(path):
 
 
 def core_pages():
-    from .pages import (cohort, concordance, fractions, functions, mags, metabolomics, modules, overview, proteomics, qc,
-                        search, srna, taxonomy, variance)
-    return [overview.PAGE, qc.PAGE, taxonomy.PAGE, mags.PAGE, functions.PAGE, modules.PAGE, srna.PAGE, proteomics.PAGE,
-            metabolomics.PAGE, search.PAGE, cohort.PAGE, concordance.PAGE, fractions.PAGE, variance.PAGE]
+    from .pages import (cohort, concordance, fractions, functions, mags, metabolomics, modules, networks, overview,
+                        proteomics, qc, search, srna, taxonomy, variance)
+    return [overview.PAGE, qc.PAGE, taxonomy.PAGE, mags.PAGE, functions.PAGE, modules.PAGE, networks.PAGE, srna.PAGE,
+            proteomics.PAGE, metabolomics.PAGE, search.PAGE, cohort.PAGE, concordance.PAGE, fractions.PAGE,
+            variance.PAGE]
 
 
 def plugin_pages(modules=()):

@@ -68,6 +68,7 @@ start it on a node and open it through an SSH tunnel (`ssh -L 8050:<node>:8050 <
 | MAGs | CheckM2 quality, GTDB taxonomy of the MAGs, abundance (mg) and activity (mt) of a taxon's MAGs by group, log2(mt/mg) per MAG, MAG catalogue |
 | Functions | KEGG KO / module / pathway, CAZy, EC per omic (mg, mt and the metaproteome fractions): clustered heatmap of the most variable terms (rows / samples clustered, CLR or log, site colour bar), group tests, one term by group, expression ratio mt/mg |
 | Modules | KEGG module completeness (optional, `imp-explorer modules`): most variable modules of the community, group tests, one module by group and the MAGs (taxa) that carry it in each sample, module profiles of the taxa across the cohort (core and accessory modules) |
+| Networks | metabolic networks of IMP-metabolic (optional, `imp-explorer networks`): properties of the community networks by group (size, connectivity, scope), share of the community's reactions in its MAGs, reactions present more often in one group, pan-reactomes of species / genera / families (core share vs number of MAGs), hub metabolites |
 | Search | one name across all layers (Kraken2, mOTUs, MAGs, functions, proteins, sRNA, metabolites) by group |
 | sRNA | sRNA-IMP results (optional): composition per fraction, QC, RNA classes, one feature next to mg and mt |
 | Proteomics | metaproteomics (optional, `imp-explorer proteomics`): library QC, which genera make the proteins of a KEGG term, a genus's main KEGG terms, the proteins of a term |
@@ -101,6 +102,18 @@ modules both agree (about 88–90 % of 392 modules for IMP3 3.0.2 runs; the rest
 Without `--definitions` only Mantis' community completeness is added (`source` = `mantis`). The KEGG module definitions are downloaded from
 KEGG's REST service and are subject to KEGG's terms of use; they are not distributed with imp-explorer.
 
+## Metabolic networks (IMP-metabolic)
+
+```bash
+imp-metabolic map --refdb <refdb> --imp-root <IMP3 root> --out <mapping>
+imp-metabolic networks --mapping <mapping> --refdb <refdb> --out <networks>
+imp-explorer networks --data <release> --networks <networks> --mapping <mapping> --refdb <refdb> [--id-case upper]
+```
+
+[IMP-metabolic](https://github.com/genomeanalysislcsb/IMP-metabolic) reconstructs metabolic networks of each
+community, MAG and taxon (pan-reactomes) from the Mantis annotation; `imp-explorer networks` adds its results to a
+release (sample ids translated like the other layers) and the *Networks* page shows them by group.
+
 ## Release tables
 
 | table | rows | content |
@@ -113,6 +126,7 @@ KEGG's REST service and are subject to KEGG's terms of use; they are not distrib
 | `functions` | sample × omic × db × feature | featureCounts on the Mantis annotation (default kegg_ko, kegg_module, kegg_pathway, cazy, enzyme_ec) |
 | `modules` | sample × scope × bin × module | (optional, `imp-explorer modules`) KEGG module completeness of the community (Mantis) and of each MAG: best path through the definition, KOs present and missing |
 | `module_info` | module | (optional) name, class and definition of the KEGG modules |
+| `met_*` | (optional, `imp-explorer networks`) | IMP-metabolic: network topology, hubs, MAG coverage, pan-reactome summaries, community reactions, reaction equations |
 | `cohort_*` | (optional) | results of `imp-explorer cohort`: tests, models, PERMANOVA, ordination, QC, covariates (see the docs) |
 
 Keys: `sample_id`, `omic`, feature (`taxon` + `rank`, `bin_id`, `feature` + `db`). Study layers (sRNA, proteomics,

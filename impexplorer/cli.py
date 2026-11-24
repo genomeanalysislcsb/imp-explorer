@@ -5,11 +5,12 @@ import sys
 def main(argv=None):
     argv = list(sys.argv[1:] if argv is None else argv)
     if not argv or argv[0] in ("-h", "--help"):
-        print("usage: imp-explorer {export,fraction,cohort,metadata,modules,srna,proteomics,metabolomics,qc,run} ...\n  export  IMP3 outputs -> release tables\n"
+        print("usage: imp-explorer {export,fraction,cohort,metadata,modules,networks,srna,proteomics,metabolomics,qc,run} ...\n  export  IMP3 outputs -> release tables\n"
               "  fraction  add a second fraction of the samples (e.g. extracellular IMP3 runs, remapped reads)\n"
               "  cohort  cohort analysis of a release (tables, PDF/HTML report, app page)\n"
               "  metadata  template (dictionary) for the sample metadata, and checks of a metadata table\n"
               "  modules  KEGG module completeness of the community (Mantis) and of every MAG\n"
+              "  networks  add the metabolic networks of IMP-metabolic (topology, pan-reactomes, community reactions)\n"
               "  srna    add the results of an sRNA-IMP cohort analysis to a release (optional layer)\n"
               "  proteomics    add metaproteomics results (taxa / KEGG per fraction, protein catalogue) to a release\n"
               "  metabolomics  add metabolomics results (generic assay / feature / value tables) to a release\n"
@@ -21,6 +22,8 @@ def main(argv=None):
         from .export import main as m
     elif cmd == "modules":
         from .modules import main as m
+    elif cmd == "networks":
+        from .networks import main as m
     elif cmd == "srna":
         from .srna import main as m
     elif cmd == "proteomics":

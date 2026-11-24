@@ -1231,3 +1231,84 @@ def test_modules_layer(tmp_path):
     assert len(carriers.data) == 1 and carriers.data[0].z is not None
     sp = fk.fns["mo-species.figure"]("genus", ["high", "medium", "low"], 1.0, "", [])
     assert len(sp.data) == 1
+
+
+def test_networks_layer(tmp_path):
+    """imp-explorer networks: IMP-metabolic outputs (folder names in lower case) -> met_* tables of a release"""
+    from impexplorer.cli import main as cli
+    root, md = build(tmp_path / "fx")
+    rel = tmp_path / "rel"
+    assert cli(["export", "--imp-root", str(root), "--metadata", md, "--out", str(rel), "--format", "tsv",
+                "--threads", "1"]) == 0
+    sids = list(read_table(str(rel), "samples")["sample_id"])
+    nets, mp, ref = tmp_path / "nets", tmp_path / "map", tmp_path / "refdb"
+    for d in (nets, mp, ref):
+        d.mkdir()
+    rows, hubs, cov, com = [], [], [], []
+    for i, s in enumerate(sids):
+        for rset, k in (("specific", 1), ("all", 2)):
+            rows.append({"set": rset, "level": "community", "id": s.lower(), "sample_id": s.lower(),
+                         "reactions": 100 * k + i, "metabolites": 90 * k, "components": 5, "giant_share": 0.8,
+                         "mean_degree": 3.0, "clustering": 0.05, "mean_path_length": 5.0,
+                         "scope_metabolites": 40 + i, "scope_reaction_share": 0.4})
+            rows.append({"set": rset, "level": "bin", "id": s.lower() + ":bin.1", "sample_id": s.lower(),
+                         "reactions": 50 * k, "metabolites": 40, "components": 3, "giant_share": 0.7,
+                         "mean_degree": 2.9, "clustering": 0.03, "mean_path_length": 6.0,
+                         "scope_metabolites": 20, "scope_reaction_share": 0.3})
+            hubs.append({"set": rset, "level": "community", "id": s.lower(), "metabolite": "MNXM23@MNXD1",
+                         "name": "pyruvate", "degree": 40, "betweenness": 0.1})
+            cov.append({"sample_id": s.lower(), "community_reactions": 100, "in_mags": 90, "share_in_mags": 0.9,
+                        "set": rset})
+        for r in ["MNXR1", "MNXR2"] + (["MNXR3"] if i % 2 else []):
+            com.append({"sample_id": s.lower(), "mnx_id": r, "n_genes": 1, "n_specific_genes": 1, "mg_reads": 5,
+                        "mt_reads": 2, "confidence": "specific", "variants": 1})
+    pd.DataFrame(rows).to_csv(nets / "topology.tsv.gz", sep="\t", index=False)
+    pd.DataFrame(hubs).to_csv(nets / "hubs.tsv.gz", sep="\t", index=False)
+    pd.DataFrame(cov).to_csv(nets / "mag_coverage.tsv.gz", sep="\t", index=False)
+    pd.DataFrame([{"taxon": "Bacteroides uniformis", "rank": "species", "n_mags": 3, "pan": 100, "core": 80,
+                   "accessory": 20, "rare": 0, "set": "specific"}]).to_csv(nets / "pan_summary.tsv.gz", sep="\t",
+                                                                          index=False)
+    pd.DataFrame(com).to_csv(mp / "community_reactions.tsv.gz", sep="\t", index=False)
+    pd.DataFrame({"mnx_id": ["MNXR1", "MNXR2", "MNXR3"],
+                  "equation": ["1 MNXM99@MNXD1 = 1 MNXM100@MNXD1", "1 MNXM100@MNXD1 = 1 MNXM101@MNXD1",
+                               "1 MNXM99@MNXD2 = 1 MNXM99@MNXD1"], "ec_list": ["2.7.1.1", "5.3.1.9", ""]}
+                 ).to_csv(ref / "reactions.tsv.gz", sep="\t", index=False)
+    pd.DataFrame({"mnx_id": ["MNXM99", "MNXM100", "MNXM101"], "name": ["D-glucose", "G6P", "F6P"]}
+                 ).to_csv(ref / "metabolites.tsv.gz", sep="\t", index=False)
+    assert cli(["networks", "--data", str(rel), "--networks", str(nets), "--mapping", str(mp), "--refdb", str(ref),
+                "--id-case", "upper", "--format", "tsv"]) == 0
+    t = read_table(str(rel), "met_topology")
+    assert set(t.loc[t["level"] == "community", "id"]) == set(sids)
+    assert set(t.loc[t["level"] == "bin", "id"]) == {s + ":bin.1" for s in sids}
+    assert set(read_table(str(rel), "met_community_reactions")["sample_id"]) == set(sids)
+    eq = read_table(str(rel), "met_reactions").set_index("mnx_id")["equation"]
+    assert eq["MNXR1"] == "1 D-glucose <=> 1 G6P" and eq["MNXR3"] == "1 D-glucose[e] <=> 1 D-glucose"
+    assert "met_topology" in read_manifest(str(rel))["tables"]
+    try:
+        import dash  # noqa: F401
+        import duckdb  # noqa: F401
+    except ImportError:
+        return
+    from impexplorer.app import create_app
+    from impexplorer.app.pages import networks as page
+    app = create_app(str(rel))
+    assert "Networks" in [p.name for p in app._imp_pages]
+
+    class Fake:
+        fns = {}
+
+        def callback(self, *outs, **kw):
+            def deco(f):
+                self.fns["%s.%s" % (outs[0].component_id, outs[0].component_property)] = f
+                return f
+            return deco
+    fk = Fake()
+    page.register(fk, app._imp_data)
+    assert page.layout(app._imp_data) is not None
+    box, cov_fig, tab = fk.fns["nw-box.figure"]("specific", "reactions", "group", "", [])
+    assert len(box.data) >= 2 and tab is not None
+    rx = fk.fns["nw-rx.children"]("specific", 0.1, "group", "", [])
+    assert rx is not None
+    pan, pantab = fk.fns["nw-pan.figure"]("specific", "species")
+    assert len(pan.data) == 1
+    assert fk.fns["nw-hubs.children"]("specific", "", []) is not None
