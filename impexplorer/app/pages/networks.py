@@ -180,7 +180,9 @@ def register(app, data):
         fig = go.Figure(go.Scatter(x=p["n_mags"], y=p["core_share"], mode="markers", text=p["taxon"],
                                    marker=dict(size=7, color="#2a6f97", opacity=0.6),
                                    hovertemplate="%{text}<br>%{x} MAGs<br>core share %{y:.2f}<extra></extra>"))
-        fig.update_xaxes(title="MAGs of the taxon", type="log")
+        ticks = [t for t in (2, 3, 5, 10, 20, 50, 100, 200, 500, 1000) if t <= max(2, p["n_mags"].max()) * 1.5]
+        fig.update_xaxes(title="MAGs of the taxon (log scale)", type="log", tickvals=ticks,
+                         ticktext=[str(t) for t in ticks], minor=dict(showgrid=False, ticks=""))
         fig.update_yaxes(title="core share of the pan-reactome", range=[0, 1.02])
         tab = p.sort_values("n_mags", ascending=False)[["taxon", "n_mags", "pan", "core", "accessory", "rare",
                                                         "core_share"]]
