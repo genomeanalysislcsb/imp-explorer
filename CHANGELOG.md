@@ -2,6 +2,8 @@
 
 ## unreleased
 
+- cohort: mt/mg ratio layers are missing where a feature has < 10 metagenome reads in a sample (before: CLR(0) − CLR(0), i.e. the sample's mt vs mg offset, which turned sparse features into presence/absence tests); features are compared on the samples with a ratio, with >= `--ratio-min-n` (10) per side. Changes the results of all `ratio.*` layers.
+
 - **Taxon-resolved activity**: `imp-explorer networks --activity` imports IMP-metabolic's `taxon_activity` (genus ×
   KEGG pathway metaG / metaT) as `met_taxon_activity`; the cohort analysis tests it as layers `met.taxon.mg`,
   `met.taxon.mt` and `ratio.met.taxon` (by default when present).

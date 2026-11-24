@@ -175,6 +175,8 @@ def parser():
     ap.add_argument("--qc-drop", default=None, choices=("FAIL", "WARN", "none"), help="samples left out  [FAIL]")
     ap.add_argument("--prevalence", type=float, default=None, help="features with >= 10 reads in at least this share "
                     "of samples are tested  [0.1]")
+    ap.add_argument("--ratio-min-n", type=int, default=None, help="mt/mg ratio layers: a feature is compared "
+                    "only with a ratio (>= 10 metagenome reads) in at least this many samples on each side  [10]")
     ap.add_argument("--nmds", default=None, help="layers with an NMDS ('all' = every layer, '' = none); sRNA-IMP names (genus, "
                     "fn_kegg_pathway) mean the metagenome layers (kraken.genus.mg, kegg_pathway.mg)")
     ap.add_argument("--nmds-starts", type=int, default=None, help="random starts per NMDS (+ 1 PCoA start)  [5]")
@@ -208,12 +210,12 @@ def parser():
 
 DEFAULTS = {"metadata": "", "dictionary": "", "id_col": "", "group_col": "group", "group_order": "", "reference": "", "block": "",
             "covariates": "", "model": "", "model_notes": "", "permutations": 999, "sig_q": 0.1, "outlier_z": 4.0,
-            "qc_drop": "FAIL", "term_names": "", "name": "", "layers": DEFAULT_LAYERS, "prevalence": 0.1,
+            "qc_drop": "FAIL", "term_names": "", "name": "", "layers": DEFAULT_LAYERS, "prevalence": 0.1, "ratio_min_n": 10,
             "min_mg_pairs": 1e6, "min_mt_pairs": 1e6, "nmds": "kraken.genus.mg,kegg_pathway.mg", "nmds_starts": 5,
             "paper_model": "", "paper_transform": "tss", "paper_qc": "FAIL",
             "concordance": "", "contig_min_share": 1e-5, "fraction_pairs": "",
             "fraction_min_r": 0.5}
-TYPES = {"permutations": int, "nmds_starts": int, "sig_q": float, "outlier_z": float, "prevalence": float, "min_mg_pairs": float,
+TYPES = {"permutations": int, "nmds_starts": int, "sig_q": float, "outlier_z": float, "prevalence": float, "ratio_min_n": int, "min_mg_pairs": float,
          "min_mt_pairs": float, "contig_min_share": float, "fraction_min_r": float}
 
 

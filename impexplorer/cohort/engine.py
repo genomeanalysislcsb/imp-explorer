@@ -59,15 +59,23 @@ class Analysis:
         BH per layer and comparison"""
         C = self.C
         rows = []
+        has_na = bool(V.isna().values.any())          # ratio layers: a feature is compared on the samples with a ratio
+        min_n = max(MIN_N, int(getattr(self.a, "ratio_min_n", 10) or 10)) if has_na else MIN_N
         gs = [s for s in samples if C.group(s) in C.groups]
         if len(C.groups) >= 2 and len(gs) >= 6:
             labs = np.array([C.group(s) for s in gs])
             X = V.loc[gs].values
             for j, f in enumerate(V.columns):
-                h, p = kruskal([X[labs == g, j] for g in C.groups])
-                med = {g: float(np.median(X[labs == g, j])) for g in C.groups}
-                rows.append([layer, f, "all groups", "kruskal", len(gs), np.nan,
-                             np.nan, np.nan, h, p, "; ".join("%s %.4g" % (g, med[g]) for g in C.groups)])
+                parts = {g: X[labs == g, j] for g in C.groups}
+                if has_na:
+                    parts = {g: v[~np.isnan(v)] for g, v in parts.items()}
+                    parts = {g: v for g, v in parts.items() if len(v) >= min_n}
+                    if len(parts) < 2:
+                        continue
+                h, p = kruskal(list(parts.values()))
+                med = {g: float(np.median(v)) for g, v in parts.items()}
+                rows.append([layer, f, "all groups", "kruskal", sum(len(v) for v in parts.values()), np.nan,
+                             np.nan, np.nan, h, p, "; ".join("%s %.4g" % (g, med[g]) for g in med)])
         for lab, kind, A, B in self.comparisons(samples):
             A = [s for s in A if s in V.index]
             B = [s for s in B if s in V.index]
@@ -77,12 +85,19 @@ class Analysis:
             ba = [C.block_of(s) for s in A]
             bb = [C.block_of(s) for s in B]
             for j, f in enumerate(V.columns):
-                if kind == "within" and len(set(ba) | set(bb)) > 1:
-                    auc, p, _ = van_elteren(XA[:, j], ba, XB[:, j], bb)
+                xa, xb, bja, bjb = XA[:, j], XB[:, j], ba, bb
+                if has_na:
+                    ka, kb = ~np.isnan(xa), ~np.isnan(xb)
+                    if ka.sum() < min_n or kb.sum() < min_n:
+                        continue
+                    xa, xb = xa[ka], xb[kb]
+                    bja, bjb = [b for b, k in zip(ba, ka) if k], [b for b, k in zip(bb, kb) if k]
+                if kind == "within" and len(set(bja) | set(bjb)) > 1:
+                    auc, p, _ = van_elteren(xa, bja, xb, bjb)
                 else:
-                    auc, p = mannwhitney(XA[:, j], XB[:, j])
-                rows.append([layer, f, lab, kind, len(A), len(B), float(np.median(XA[:, j])),
-                             float(np.median(XB[:, j])), auc, p, ""])
+                    auc, p = mannwhitney(xa, xb)
+                rows.append([layer, f, lab, kind, len(xa), len(xb), float(np.median(xa)),
+                             float(np.median(xb)), auc, p, ""])
         df = pd.DataFrame(rows, columns=["layer", "feature", "comparison", "kind", "n_a", "n_b", "median_a",
                                          "median_b", "effect", "p", "medians"])
         df["q"] = np.nan

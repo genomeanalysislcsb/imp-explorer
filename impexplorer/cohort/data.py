@@ -57,6 +57,8 @@ class Layer:
         if self.kind == "metab":
             ok = ((self.M > 0).mean(axis=0) >= prevalence) & (self.M.std(axis=0) > 0)
             return list(self.M.columns[ok])
+        if self.kind == "ratio":                                 # features with a ratio in >= prevalence
+            return list(self.M.columns[self.M.notna().mean(axis=0) >= prevalence])
         if self.kind != "counts":
             return list(self.M.columns)
         return list(self.M.columns[(self.M >= min_reads).mean(axis=0) >= prevalence])
@@ -517,11 +519,17 @@ class Cohort:
 
     def ratio(self, mg, mt):
         """expression ratio per feature: CLR(mt) - CLR(mg) of the features tested in both (log scale, relative to
-        the average feature of the sample); > 0 = more transcribed than its gene copies suggest"""
+        the average feature of the sample); > 0 = more transcribed than its gene copies suggest. Missing (NaN) where
+        the feature has < 10 metagenome reads in a sample: without gene copies there is no expression ratio, and
+        CLR(0) - CLR(0) would only be the sample's mt vs mg offset"""
         ss = [s for s in mg.M.index if s in mt.M.index]
         f = sorted(set(mg.tested(self.a.prevalence)) & set(mt.tested(self.a.prevalence)))
         if len(ss) < 6 or len(f) < 3:
             return None
-        A = clr(mg.M.loc[ss, f].values)
+        G = mg.M.loc[ss, f].values
+        A = clr(G)
         B = clr(mt.M.loc[ss, f].values)
-        return pd.DataFrame((B - A) / np.log(2), index=ss, columns=f)        # log2 units
+        Y = (B - A) / np.log(2)                                              # log2 units
+        Y[G < 10] = np.nan
+        Y = pd.DataFrame(Y, index=ss, columns=f)
+        return Y.loc[:, Y.notna().sum() >= 6]

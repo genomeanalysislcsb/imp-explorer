@@ -1365,3 +1365,33 @@ def test_mantis_module_layouts(tmp_path):
     (d / "kegg_modules.tsv").write_text("a\tb\nx\ty\n")
     mm = M.mantis_modules(str(tmp_path / "s"))
     assert mm.empty and mm.attrs["columns"] == ["a", "b"]
+
+
+def test_ratio_missing_without_gene_copies():
+    # mt/mg ratio: missing where the feature has < 10 metagenome reads; compared only with >= --ratio-min-n per side
+    import argparse
+    import numpy as np
+    from impexplorer.cohort.data import Cohort, Layer
+    from impexplorer.cohort.engine import Analysis
+    rng = np.random.default_rng(1)
+    ss = ["S%02d" % i for i in range(40)]
+    mg = pd.DataFrame(rng.integers(50, 200, (40, 4)), index=ss, columns=list("abcd")).astype(float)
+    mt = mg * rng.uniform(0.5, 2, (40, 4))
+    mg.loc[ss[:8], "c"] = 0                       # absent in 8 samples of group A
+    mg.loc[ss[:15], "d"] = 0                      # present in only 5 of group A
+    mt.loc[ss[:4], "c"] = 0
+    C = Cohort.__new__(Cohort)
+    C.a = argparse.Namespace(prevalence=0.1, ratio_min_n=10)
+    Y = C.ratio(Layer("x.mg", "x", "mg", "counts", mg), Layer("x.mt", "x", "mt", "counts", mt))
+    assert Y["c"].isna().sum() == 8 and Y["d"].isna().sum() == 15 and Y["a"].notna().all()
+
+    class Stub:
+        groups, ref, block = ["A", "B"], "B", ""
+        group = staticmethod(lambda s: "A" if s < "S20" else "B")
+        block_of = staticmethod(lambda s: "all")
+    E = Analysis.__new__(Analysis)
+    E.C, E.a = Stub(), C.a
+    t = E.test_matrix(Y, ss, "ratio.x")
+    w = t[t["kind"] != "kruskal"].set_index("feature")
+    assert set(w.index) == {"a", "b", "c"}                     # d: 5 samples with a ratio in A < 10
+    assert w.loc["c", "n_a"] == 12 and w.loc["a", "n_a"] == 20
