@@ -13,7 +13,8 @@ from ._common import box_by_group, grid, selection
 METRICS = {"reactions": "reactions", "metabolites": "metabolites", "components": "connected components",
            "giant_share": "share in the largest component", "mean_degree": "mean degree",
            "clustering": "clustering coefficient", "mean_path_length": "mean path length",
-           "scope_metabolites": "scope: metabolites reachable", "scope_reaction_share": "scope: share of reactions"}
+           "scope_metabolites": "scope: metabolites reachable", "scope_reaction_share": "scope: share of reactions",
+           "share_in_mags": "share of the community's reactions in its MAGs"}
 SET_LABEL = {"specific": "specific reactions", "all": "all reactions (incl. broad ECs)",
              "active": "active reactions (expressed, metaT)"}
 
@@ -70,16 +71,15 @@ def layout(data):
                                                       {"label": "genes in the sample", "value": "genes"}], "")),
                   control("min. prevalence (reactions)", dd("nw-prev", [0.1, 0.25, 0.5], 0.25))],
                  className="controls"),
-        html.Div([card("Community networks by group", graph("nw-box")),
-                  card("Share of the community's reactions in its MAGs", graph("nw-cov"),
-                       note="reactions of the high- and medium-quality MAGs / reactions of the community")],
+        html.Div([card("Community networks by group", graph("nw-box"),
+                       note="one property per community network; 'share of the community's reactions in its MAGs' = "
+                            "reactions of the high- and medium-quality MAGs / reactions of the community"),
+                  card("Network size and sample size", graph("nw-size"),
+                       note="the chosen property against the genes predicted in the sample's assembly: larger "
+                            "assemblies (deeper sequencing, more diverse communities) give larger networks and more "
+                            "MAGs. With 'adjust for genes', box plots and tests use the residuals of a linear fit on "
+                            "log10(genes), shifted to the median")],
                  className="grid g2"),
-        html.Div(style={"height": "16px"}),
-        card("Network size and sample size", graph("nw-size"),
-             note="the chosen property against the number of genes predicted in the sample's assembly: larger "
-                  "assemblies (deeper sequencing, more diverse communities) give larger networks. With 'adjust for "
-                  "genes', box plots and tests use the residuals of a linear fit on log10(genes), shifted to the "
-                  "median"),
         html.Div(style={"height": "16px"}),
         card("Network properties: differences between groups", html.Div(id="nw-tests"),
              note="community networks; Kruskal-Wallis (2 groups: Mann-Whitney), BH-FDR over the properties; with "
@@ -119,8 +119,7 @@ def register(app, data):
         st_ = data.q("SELECT sample_id, genes FROM met_stats")
         genes = pd.Series(pd.to_numeric(st_["genes"], errors="coerce").values, index=st_["sample_id"].astype(str))
 
-    @app.callback(Output("nw-box", "figure"), Output("nw-cov", "figure"), Output("nw-tests", "children"),
-                  Output("nw-size", "figure"),
+    @app.callback(Output("nw-box", "figure"), Output("nw-tests", "children"), Output("nw-size", "figure"),
                   Input("nw-set", "value"), Input("nw-metric", "value"), Input("nw-adj", "value"),
                   Input(GLOBAL[0], "value"), Input(GLOBAL[1], "value"), Input(GLOBAL[2], "value"),
                   Input(GLOBAL[3], "value"))
@@ -129,9 +128,12 @@ def register(app, data):
         d = topo(data, rset or "specific")
         d = d[d["id"].astype(str).isin(s["sample_id"].astype(str))]
         if d.empty:
-            return empty_fig(), empty_fig(), None, empty_fig()
+            return empty_fig(), None, empty_fig()
         M = d.set_index("id")[[c for c in METRICS if c in d.columns]].astype(float)
         M.index = M.index.astype(str)
+        c = data.q("SELECT sample_id, share_in_mags FROM met_mag_coverage WHERE \"set\"=?", [rset or "specific"])
+        M["share_in_mags"] = pd.Series(pd.to_numeric(c["share_in_mags"], errors="coerce").values,
+                                       index=c["sample_id"].astype(str)).reindex(M.index)
         size = empty_fig("needs the mapping statistics (imp-explorer networks with IMP-metabolic >= imet-0008)")
         if genes is not None:
             x = genes[~genes.index.duplicated()].reindex(M.index).astype(float)
@@ -158,16 +160,13 @@ def register(app, data):
                         M.loc[~ok, c] = np.nan
         ylab = METRICS.get(metric, metric) + (" (adjusted for genes)" if adj == "genes" and genes is not None else "")
         box = box_by_group(M[metric], g, cmap, ylab, height=400)
-        c = data.q("SELECT sample_id, share_in_mags FROM met_mag_coverage WHERE \"set\"=?", [rset or "specific"])
-        c = pd.Series(pd.to_numeric(c["share_in_mags"], errors="coerce").values, index=c["sample_id"].astype(str))
-        cov = box_by_group(c[c.index.isin(s["sample_id"].astype(str))], g, cmap, "share in MAGs", height=400)
         if g.nunique() > 1:
             t = tests(M, g)
             t["feature"] = t["feature"].map(lambda x: METRICS.get(x, x))
             tab = grid("nw-tgrid", t.rename(columns={"feature": "property"}), height=330, fit=True)
         else:
             tab = html.P("choose a 'group by' variable with at least two groups", className="hint")
-        return box, cov, tab, size
+        return box, tab, size
 
     @app.callback(Output("nw-rx", "children"), Input("nw-set", "value"), Input("nw-prev", "value"),
                   Input(GLOBAL[0], "value"), Input(GLOBAL[1], "value"), Input(GLOBAL[2], "value"),

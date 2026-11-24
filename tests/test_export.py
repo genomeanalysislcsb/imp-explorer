@@ -1327,9 +1327,9 @@ def test_networks_layer(tmp_path):
     fk = Fake()
     page.register(fk, app._imp_data)
     assert page.layout(app._imp_data) is not None
-    box, cov_fig, tab, size = fk.fns["nw-box.figure"]("specific", "reactions", "", "group", "", [])
+    box, tab, size = fk.fns["nw-box.figure"]("specific", "reactions", "", "group", "", [])
     assert len(box.data) >= 2 and tab is not None and len(size.data) >= 2
-    box2, _, tab2, _ = fk.fns["nw-box.figure"]("specific", "reactions", "genes", "group", "", [])
+    box2, tab2, _ = fk.fns["nw-box.figure"]("specific", "share_in_mags", "genes", "group", "", [])
     assert len(box2.data) >= 2
     rx = fk.fns["nw-rx.children"]("specific", 0.1, "group", "", [])
     assert rx is not None

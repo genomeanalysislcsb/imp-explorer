@@ -97,9 +97,8 @@ genes → MetaNetX reactions, one network per community, MAG and taxon (pan-reac
   variants of broad ECs), *active* (reactions with metatranscriptome reads, TPM ≥ 1; only with metaT).
 - **Community networks by group**: one network property per sample (reactions, metabolites, components, share in
   the largest component, degree, clustering, path length, scope from a minimal glucose medium); topology is
-  computed without currency metabolites.
-- **Share of the community's reactions in its MAGs**: how much of the community the high- and medium-quality MAGs
-  cover.
+  computed without currency metabolites. The metric *share of the community's reactions in its MAGs* says how much of
+  the community the high- and medium-quality MAGs cover.
 - **Network size and sample size**: the property against the genes of the sample's assembly. Network size follows
   assembly size (sequencing depth, community diversity); **adjust for genes in the sample** uses the residuals of a
   linear fit on log10(genes) for box plots and tests.
