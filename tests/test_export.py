@@ -1281,8 +1281,17 @@ def test_networks_layer(tmp_path):
                  ).to_csv(ref / "reactions.tsv.gz", sep="\t", index=False)
     pd.DataFrame({"mnx_id": ["MNXM99", "MNXM100", "MNXM101"], "name": ["D-glucose", "G6P", "F6P"]}
                  ).to_csv(ref / "metabolites.tsv.gz", sep="\t", index=False)
+    act = tmp_path / "act"
+    act.mkdir()
+    pd.DataFrame([{"sample_id": s.lower(), "rank": "genus", "taxon": tx, "unit": "pathway", "feature": pw,
+                   "name": "x", "n_genes": 3, "mg_reads": 40 + 10 * i + j, "mt_reads": 15 + 5 * i * (tx == "Blautia"),
+                   "mg_tpm": 1.0, "mt_tpm": 1.0, "mta": 1.0}
+                  for i, s in enumerate(sids) for j, (tx, pw) in enumerate(
+                      [("Blautia", "map00010"), ("Blautia", "map00071"), ("Bacteroides", "map00010"),
+                       ("Bacteroides", "map00500")])]).to_csv(act / "taxon_activity.tsv.gz", sep="\t", index=False)
     assert cli(["networks", "--data", str(rel), "--networks", str(nets), "--mapping", str(mp), "--refdb", str(ref),
-                "--id-case", "upper", "--format", "tsv"]) == 0
+                "--activity", str(act), "--id-case", "upper", "--format", "tsv"]) == 0
+    assert set(read_table(str(rel), "met_taxon_activity")["sample_id"]) == set(sids)
     t = read_table(str(rel), "met_topology")
     assert set(t.loc[t["level"] == "community", "id"]) == set(sids)
     assert set(t.loc[t["level"] == "bin", "id"]) == {s + ":bin.1" for s in sids}
@@ -1301,10 +1310,13 @@ def test_networks_layer(tmp_path):
         from impexplorer.cohort.data import Cohort
         from impexplorer.cohort import settings
         a = settings.parse(["--data", str(rel), "--out", str(tmp_path / "coh"), "--group-col", "group",
-                            "--layers", "met.reactions.mg,met.reactions.mt,ratio.met.reactions"])
+                            "--layers", "met.reactions.mg,met.reactions.mt,ratio.met.reactions,met.taxon.mg,"
+                                        "met.taxon.mt,ratio.met.taxon"])
         C = Cohort(a)
         C.load_layers(a.layers)
-        assert {"met.reactions.mg", "met.reactions.mt", "ratio.met.reactions"} <= set(C.layers)
+        assert {"met.reactions.mg", "met.reactions.mt", "ratio.met.reactions", "met.taxon.mg",
+                "ratio.met.taxon"} <= set(C.layers)
+        assert "Blautia | map00010 x" in C.layers["met.taxon.mg"].M.columns
         assert {"net_specific_reactions", "net_active_reactions", "net_all_share_in_mags"} <= set(C.metric_names)
     try:
         import dash  # noqa: F401

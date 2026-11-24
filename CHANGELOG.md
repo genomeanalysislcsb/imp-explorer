@@ -2,6 +2,10 @@
 
 ## unreleased
 
+- **Taxon-resolved activity**: `imp-explorer networks --activity` imports IMP-metabolic's `taxon_activity` (genus ×
+  KEGG pathway metaG / metaT) as `met_taxon_activity`; the cohort analysis tests it as layers `met.taxon.mg`,
+  `met.taxon.mt` and `ratio.met.taxon` (by default when present).
+
 - modules: Mantis' `kegg_modules.tsv` of other Mantis versions (other column names, completeness in %) are read;
   an unknown layout no longer fails the sample (86 of 180 Expobiome samples): the community is then scored from
   `sample_kos` with the KEGG definitions, and the log lists the columns found.

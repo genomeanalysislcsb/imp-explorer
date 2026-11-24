@@ -331,6 +331,15 @@ class Cohort:
                     M = d.pivot_table(index="sample_id", columns=rank, values="reads", aggfunc="sum", fill_value=0)
                     M = M.drop(columns=[c for c in M.columns if c == "unclassified"])
                     self._add(key, "MAG reads per GTDB %s, %s" % (rank, self.omic_label(parts[2])), parts[2], M)
+                elif parts[0] == "met" and parts[1] == "taxon":   # met.taxon.<omic>: taxon x pathway activity
+                    ta = read_table(self.release, "met_taxon_activity")
+                    col = "%s_reads" % parts[2]
+                    d = ta.assign(v=pd.to_numeric(ta[col], errors="coerce")).dropna(subset=["v"])
+                    d["f"] = d["taxon"].astype(str) + " | " + d["feature"].astype(str) + \
+                        d["name"].fillna("").astype(str).map(lambda x: " " + x if x else "")
+                    M = d.pivot_table(index="sample_id", columns="f", values="v", aggfunc="sum", fill_value=0)
+                    self._add(key, "taxon x pathway (IMP-metabolic), %s" % self.omic_label(parts[2]), parts[2], M,
+                              db="taxon_pathway")
                 elif parts[0] == "met":           # IMP-metabolic (imp-explorer networks): reaction groups
                     mr = read_table(self.release, "met_community_reactions")
                     col = "%s_reads" % parts[2]

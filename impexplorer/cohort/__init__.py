@@ -108,6 +108,11 @@ def main(argv=None):
         a.layers += ",met.reactions.mg"
         if "mt_reads" in mr.columns and pd.to_numeric(mr["mt_reads"], errors="coerce").notna().any():
             a.layers += ",met.reactions.mt,ratio.met.reactions"
+    if default and table_path(a.data, "met_taxon_activity"):         # taxon x pathway activity
+        ta = read_table(a.data, "met_taxon_activity")
+        a.layers += ",met.taxon.mg"
+        if "mt_reads" in ta.columns and pd.to_numeric(ta["mt_reads"], errors="coerce").notna().any():
+            a.layers += ",met.taxon.mt,ratio.met.taxon"
     if default and table_path(a.data, "prot_samples"):
         a.layers += ",prot"                   # metaproteomics: genus and KEGG layers of every fraction
     if a.concordance:                         # the layers the concordance sets need

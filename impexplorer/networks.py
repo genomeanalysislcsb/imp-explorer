@@ -11,6 +11,8 @@ the IMP-metabolic reference database (--refdb) for readable reaction equations. 
   met_pan_summary         per taxon and rank: MAGs, pan, core, accessory and rare reactions
   met_community_reactions sample x reaction group: confidence, genes, metaG / metaT reads
   met_reactions           the reactions used: equation with metabolite names, ECs (with --refdb)
+  met_taxon_activity      per sample, taxon and KEGG pathway (or reaction group): metaG / metaT reads and TPM,
+                          relative expression (with --activity, imp-metabolic activity)
   met_stats               per sample: genes, genes with a reaction, reaction groups (mapping statistics)
   met_keystones           per community network: reactions with degree, betweenness, load, relative expression
                           (metaT / metaG) and the keystone flag (if IMP-metabolic wrote them)
@@ -73,6 +75,8 @@ def main(argv=None):
     ap.add_argument("--networks", required=True, help="output of imp-metabolic networks")
     ap.add_argument("--mapping", required=True, help="output of imp-metabolic map")
     ap.add_argument("--refdb", help="IMP-metabolic reference database (reaction equations with names)")
+    ap.add_argument("--activity", help="output of imp-metabolic activity (taxon x pathway metaG / metaT) -> "
+                    "met_taxon_activity")
     ap.add_argument("--id-map", help="TSV/CSV: IMP-metabolic sample id, release sample id")
     ap.add_argument("--id-regex", help="regular expression; its first group (or match) is the sample id")
     ap.add_argument("--id-case", choices=("keep", "upper", "lower"), default="keep")
@@ -89,6 +93,11 @@ def main(argv=None):
         df = read_any(a.networks if src == "networks" else a.mapping, f)
         if df is not None and len(df):
             t[name] = df
+    if a.activity:
+        ta = read_any(a.activity, "taxon_activity")
+        if ta is None:
+            sys.exit("networks: %s/taxon_activity not found" % a.activity)
+        t["met_taxon_activity"] = ta
     names = sorted(set(t["met_community_reactions"]["sample_id"].astype(str)))
     ids = dict(zip(names, derive_ids(names, read_id_map(a.id_map) if a.id_map else None, a.id_regex, a.id_case)))
 
