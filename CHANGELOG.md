@@ -2,6 +2,12 @@
 
 ## unreleased
 
+- **Help** link in the top bar: opens the documentation section of the page shown; documentation of the Modules and
+  Networks pages and of the metabolic layers of the cohort analysis.
+- Top-bar filter: identifier columns of the metadata (unique per sample, e.g. run accessions) are no longer offered.
+- Networks page: properties as floating-point values before the adjustment for genes (integer columns could fail
+  with recent pandas, leaving the plots unchanged).
+
 - **KEGG modules** (`imp-explorer modules`, page *Modules*): community completeness of every KEGG module from
   Mantis (`kegg_modules.tsv`) and the same score for each MAG from the KOs of its genes (Mantis `sample_kos.tsv`,
   gene → contig from the annotation GFF, contig → bin); module definitions downloaded from KEGG REST

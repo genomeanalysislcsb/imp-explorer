@@ -72,6 +72,9 @@ class Data:
                           and not str(c).startswith("has_")]
         # columns usable for grouping: few distinct values
         self.group_cols = [c for c in self.meta_cols if 1 < self.samples[c].nunique(dropna=True) <= 12]
+        # filter: columns that can select a subset (identifiers such as run accessions, unique per sample, left out)
+        self.filter_cols = [c for c in self.meta_cols
+                            if 1 < self.samples[c].nunique(dropna=True) < max(2, self.samples[c].notna().sum())]
         # QC status per sample and layer ('imp-explorer qc'); {layer: {sample_id: (status, reasons)}}
         self.sample_qc = {}
         if "sample_qc" in self.tables:

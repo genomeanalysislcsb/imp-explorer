@@ -6,6 +6,7 @@ entry-point group 'impexplorer.pages'. A page only appears when the tables it ne
 """
 import argparse
 import importlib
+import re
 import sys
 
 import dash
@@ -13,6 +14,14 @@ from dash import Input, Output, dcc, html
 
 from .data import Data
 from .ui import GLOBAL, QC_MODES, Page, control, dd
+
+
+DOCS = "https://genomeanalysislcsb.github.io/imp-explorer/"
+
+
+def help_url(page):
+    """the page's section of the app documentation (mkdocs anchors: lower case, spaces -> '-')"""
+    return DOCS + "app/#" + re.sub(r"[^a-z0-9]+", "-", page.name.lower()).strip("-")
 
 
 def nav_id(path):
@@ -52,10 +61,12 @@ def create_app(release, plugins=(), extra_tables=()):
         dcc.Location(id="url"),
         html.Div([
             html.Div([data.study, html.Span("IMP explorer")], className="brand"),
-            html.Nav([dcc.Link(p.name, href=p.path, id=nav_id(p.path)) for p in pages], className="nav"),
+            html.Nav([dcc.Link(p.name, href=p.path, id=nav_id(p.path)) for p in pages] +
+                     [html.A("Help", href=DOCS + "app/", target="_blank", id="help-link", className="help",
+                             title="documentation of this page (opens in a new tab)")], className="nav"),
             html.Div([
                 control("group by", dd(GLOBAL[0], [{"label": "(none)", "value": ""}] + gcols, default_group or "")),
-                control("filter", dd(GLOBAL[1], [{"label": "(all samples)", "value": ""}] + data.meta_cols, "")),
+                control("filter", dd(GLOBAL[1], [{"label": "(all samples)", "value": ""}] + data.filter_cols, "")),
                 control("values", dd(GLOBAL[2], [], [], multi=True, placeholder="all")),
                 html.Div(control("QC", dd(GLOBAL[3], [{"label": lab, "value": v} for v, lab in QC_MODES], "all")),
                          title="flagged samples per layer ('imp-explorer qc'): show all, leave out FAIL, or keep "
@@ -74,11 +85,11 @@ def create_app(release, plugins=(), extra_tables=()):
 
     by_path = {p.path: p for p in pages}
 
-    @app.callback(Output("page", "children"), *[Output(nav_id(p.path), "className") for p in pages],
-                  Input("url", "pathname"))
+    @app.callback(Output("page", "children"), Output("help-link", "href"),
+                  *[Output(nav_id(p.path), "className") for p in pages], Input("url", "pathname"))
     def _route(path):
         p = by_path.get(path or "/") or pages[0]
-        return [p.layout(data)] + ["active" if q is p else "" for q in pages]
+        return [p.layout(data), help_url(p)] + ["active" if q is p else "" for q in pages]
 
     for p in pages:
         p.register(app, data)

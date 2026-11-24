@@ -5,7 +5,10 @@ The top bar holds the controls that every page follows:
 - **group by**: any metadata column with 2–12 values (default `group` if present). Colours, box plots, group tests
   and PERMANOVA use it.
 - **filter** / **values**: keep only samples with the chosen values of one column, e.g. `site = site_1` to compare
-  groups within one site.
+  groups within one site. The columns are those of the sample metadata given to `imp-explorer export --metadata`
+  (e.g. a run accession column such as `metag_run` comes from that table, not from imp-explorer); columns that are
+  unique per sample (identifiers) are not offered, as they cannot select a subset.
+- **Help** (right of the page tabs): opens the section of this documentation for the page shown.
 - **QC** (when the release has a [`sample_qc`](sample-qc.md) table): all samples, without FAIL, or PASS only; the
   flagged samples of a layer are left out of that layer's plots.
 
@@ -73,6 +76,42 @@ Reads per functional term from featureCounts on IMP3's Mantis annotation, relati
 - **One term**: metagenome and metatranscriptome share by group, and the expression ratio log2(mt / mg) per sample.
 
 ![Functions](img/functions.png)
+
+## Modules
+
+KEGG module completeness (`imp-explorer modules`): the share of the KOs present on the best path through each
+module's definition, for the community (all genes of the sample) and for each MAG, with the current KEGG
+definitions (without them: Mantis' community scores).
+
+- **Community: most variable modules**: completeness of the 40 modules varying most between the selected samples.
+- **Differences between groups**: Kruskal-Wallis / Mann-Whitney on the community completeness, BH-FDR.
+- **One module**: completeness by group, and which MAGs (taxa) carry it in which sample.
+- **Module profiles of the taxa**: per taxon (≥ 2 MAGs), the share of its MAGs with the module; core modules near 1.
+
+## Networks
+
+Metabolic networks of [IMP-metabolic](https://github.com/genomeanalysislcsb/IMP-metabolic) (`imp-explorer networks`):
+genes → MetaNetX reactions, one network per community, MAG and taxon (pan-reactome of a species, genus or family).
+
+- **reactions**: *specific* (KEGG-reaction evidence or ECs standing for few reactions), *all* (plus the substrate
+  variants of broad ECs), *active* (reactions with metatranscriptome reads, TPM ≥ 1; only with metaT).
+- **Community networks by group**: one network property per sample (reactions, metabolites, components, share in
+  the largest component, degree, clustering, path length, scope from a minimal glucose medium); topology is
+  computed without currency metabolites.
+- **Share of the community's reactions in its MAGs**: how much of the community the high- and medium-quality MAGs
+  cover.
+- **Network size and sample size**: the property against the genes of the sample's assembly. Network size follows
+  assembly size (sequencing depth, community diversity); **adjust for genes in the sample** uses the residuals of a
+  linear fit on log10(genes) for box plots and tests.
+- **Network properties: differences between groups** and **Reactions present more often in one group** (presence
+  in the community networks, with equations and ECs).
+- **Pan-reactomes**: core share (reactions in ≥ 90 % of the taxon's MAGs) against the number of MAGs (log scale);
+  with few MAGs the core share is inflated, so compare taxa with similar MAG numbers.
+- **Keystone reactions** (with metaT): high betweenness relative to degree in the reaction graph and high relative
+  expression (metaT / metaG), after Roume et al. 2015.
+- **Hub metabolites**: highest betweenness in the community networks.
+
+The [cohort analysis](cohort.md) tests the reaction groups as layers and the network properties as metrics.
 
 ### Clustered heatmaps
 

@@ -130,11 +130,11 @@ def register(app, data):
         d = d[d["id"].astype(str).isin(s["sample_id"].astype(str))]
         if d.empty:
             return empty_fig(), empty_fig(), None, empty_fig()
-        M = d.set_index("id")[[c for c in METRICS if c in d.columns]]
+        M = d.set_index("id")[[c for c in METRICS if c in d.columns]].astype(float)
         M.index = M.index.astype(str)
         size = empty_fig("needs the mapping statistics (imp-explorer networks with IMP-metabolic >= imet-0008)")
         if genes is not None:
-            x = genes.reindex(M.index)
+            x = genes[~genes.index.duplicated()].reindex(M.index).astype(float)
             size = go.Figure()
             for lv in sorted(g.unique()):
                 ids = [i for i in M.index if g.get(i) == lv]
