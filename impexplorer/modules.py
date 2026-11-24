@@ -190,15 +190,29 @@ def download(path, sleep=0.4):
 
 # ----------------------------------------------------------------------------- one sample
 def mantis_modules(base):
-    """Mantis' community completeness: DataFrame module, name, completeness, kos, missing"""
+    """Mantis' community completeness: DataFrame module, name, completeness, kos, missing. Column names differ
+    between Mantis versions: the module id is the column with M00001-like values, the completeness the column whose
+    name contains 'complet'; an unknown layout gives an empty frame with the columns in .attrs['columns']"""
+    cols = ["module", "name", "completeness", "kos", "missing"]
     t = imp3.table(imp3.find(base, MANTIS_DIR + "/kegg_modules.tsv"))
-    if t.empty or "Module_ID" not in t.columns:
-        return pd.DataFrame(columns=["module", "name", "completeness", "kos", "missing"])
-    na = lambda s: s.replace({"NA": "", "nan": ""})                      # noqa: E731
-    return pd.DataFrame({"module": t["Module_ID"], "name": t.get("Module_name", ""),
-                         "completeness": imp3.num(t["Completeness_score_mantis"]),
-                         "kos": na(t.get("KOs_mantis", "")).str.replace(",", " "),
-                         "missing": na(t.get("Missing_KOs_mantis", "")).str.replace(",", " ")})
+    if t.empty:
+        return pd.DataFrame(columns=cols)
+    low = {c.lower(): c for c in t.columns}
+    mid = next((c for c in t.columns if t[c].astype(str).str.fullmatch(r"M\d{5}").mean() > 0.9), None)
+    comp = next((low[c] for c in low if "complet" in c), None)
+    if mid is None or comp is None:
+        out = pd.DataFrame(columns=cols)
+        out.attrs["columns"] = list(t.columns)
+        return out
+    name = next((low[c] for c in low if "name" in c), None)
+    kos = next((low[c] for c in low if "ko" in c and "miss" not in c and c != mid.lower()), None)
+    miss = next((low[c] for c in low if "miss" in c), None)
+    na = lambda s: s.astype(str).replace({"NA": "", "nan": ""}).str.replace(",", " ")      # noqa: E731
+    v = imp3.num(t[comp])
+    if v.max() > 1.5:                                        # completeness in %
+        v = v / 100
+    return pd.DataFrame({"module": t[mid], "name": t[name] if name else "", "completeness": v,
+                         "kos": na(t[kos]) if kos else "", "missing": na(t[miss]) if miss else ""})
 
 
 def gene_kos(base):
@@ -235,7 +249,9 @@ def sample_rows(base, sample, trees=None):
     info = mm[["module", "name"]].copy()
     rows = []
     if not len(mm):
-        notes.append("modules: no Mantis kegg_modules.tsv")
+        notes.append("modules: Mantis kegg_modules.tsv %s" % (
+            "in an unknown layout (columns %s): Mantis' scores not used" % ", ".join(mm.attrs["columns"][:8])
+            if mm.attrs.get("columns") else "not found"))
     gk = gene_kos(base) if trees else {}
     if trees and not gk:
         notes.append("modules: no Mantis sample_kos.tsv: Mantis' community scores only, no MAG modules")

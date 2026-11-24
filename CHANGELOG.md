@@ -2,6 +2,10 @@
 
 ## unreleased
 
+- modules: Mantis' `kegg_modules.tsv` of other Mantis versions (other column names, completeness in %) are read;
+  an unknown layout no longer fails the sample (86 of 180 Expobiome samples): the community is then scored from
+  `sample_kos` with the KEGG definitions, and the log lists the columns found.
+
 - **Help** link in the top bar: opens the documentation section of the page shown; documentation of the Modules and
   Networks pages and of the metabolic layers of the cohort analysis.
 - Top-bar filter: identifier columns of the metadata (unique per sample, e.g. run accessions) are no longer offered.

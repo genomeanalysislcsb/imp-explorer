@@ -1338,3 +1338,18 @@ def test_networks_layer(tmp_path):
     assert fk.fns["nw-hubs.children"]("specific", "", []) is not None
     assert [o["value"] for o in page.set_options(app._imp_data)] == ["specific", "all", "active"]
     assert fk.fns["nw-keys.children"]("active", "group", "", []) is not None
+
+
+def test_mantis_module_layouts(tmp_path):
+    """kegg_modules.tsv of other Mantis versions: other column names, completeness in %, unknown layout"""
+    from impexplorer import modules as M
+    d = tmp_path / "s" / M.MANTIS_DIR
+    d.mkdir(parents=True)
+    (d / "kegg_modules.tsv").write_text("Module\tName\tCompleteness (%)\tKOs\nM00001\tGlycolysis\t75\tK00844,K01810\n"
+                                        "M00002\tcore\t100\tK00134\n")
+    mm = M.mantis_modules(str(tmp_path / "s"))
+    assert list(mm["module"]) == ["M00001", "M00002"] and list(mm["completeness"]) == [0.75, 1.0]
+    assert mm["kos"].iloc[0] == "K00844 K01810"
+    (d / "kegg_modules.tsv").write_text("a\tb\nx\ty\n")
+    mm = M.mantis_modules(str(tmp_path / "s"))
+    assert mm.empty and mm.attrs["columns"] == ["a", "b"]
