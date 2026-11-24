@@ -11,6 +11,7 @@ the IMP-metabolic reference database (--refdb) for readable reaction equations. 
   met_pan_summary         per taxon and rank: MAGs, pan, core, accessory and rare reactions
   met_community_reactions sample x reaction group: confidence, genes, metaG / metaT reads
   met_reactions           the reactions used: equation with metabolite names, ECs (with --refdb)
+  met_stats               per sample: genes, genes with a reaction, reaction groups (mapping statistics)
   met_keystones           per community network: reactions with degree, betweenness, load, relative expression
                           (metaT / metaG) and the keystone flag (if IMP-metabolic wrote them)
 
@@ -30,7 +31,8 @@ from .release import read_manifest, read_table, write_table
 TABLES = {"met_topology": ("networks", "topology"), "met_hubs": ("networks", "hubs"),
           "met_mag_coverage": ("networks", "mag_coverage"), "met_pan_summary": ("networks", "pan_summary"),
           "met_community_reactions": ("mapping", "community_reactions")}
-OPTIONAL = {"met_keystones": ("networks", "keystones")}       # IMP-metabolic >= imet-0008 (with metaT)
+OPTIONAL = {"met_keystones": ("networks", "keystones"),       # IMP-metabolic >= imet-0008 (with metaT)
+            "met_stats": ("mapping", "stats")}             # genes per sample, genes mapped per evidence path
 
 
 def say(msg):

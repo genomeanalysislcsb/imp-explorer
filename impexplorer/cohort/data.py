@@ -331,6 +331,13 @@ class Cohort:
                     M = d.pivot_table(index="sample_id", columns=rank, values="reads", aggfunc="sum", fill_value=0)
                     M = M.drop(columns=[c for c in M.columns if c == "unclassified"])
                     self._add(key, "MAG reads per GTDB %s, %s" % (rank, self.omic_label(parts[2])), parts[2], M)
+                elif parts[0] == "met":           # IMP-metabolic (imp-explorer networks): reaction groups
+                    mr = read_table(self.release, "met_community_reactions")
+                    col = "%s_reads" % parts[2]
+                    d = mr.assign(v=pd.to_numeric(mr[col], errors="coerce")).dropna(subset=["v"])
+                    M = d.pivot_table(index="sample_id", columns="mnx_id", values="v", aggfunc="sum", fill_value=0)
+                    self._add(key, "metabolic reactions (IMP-metabolic), %s" % self.omic_label(parts[2]), parts[2],
+                              M, db="reaction")
                 elif parts[0] == "ratio":
                     continue                      # after the count layers
                 else:
@@ -357,6 +364,38 @@ class Cohort:
                 self.layers[key] = Layer(key, "mt/mg ratio, %s" % mg.label.rsplit(",", 1)[0], "mt/mg", "ratio", Y,
                                          db=mg.db)
         self.add_alpha()
+        self.add_network_metrics()
+
+    NET_METRICS = (("reactions", "reactions"), ("giant_share", "share in the largest component"),
+                   ("mean_degree", "mean degree"), ("mean_path_length", "mean path length"),
+                   ("scope_reaction_share", "scope: share of reactions reachable"))
+
+    def add_network_metrics(self):
+        """properties of the community metabolic networks (IMP-metabolic, imp-explorer networks) -> metrics"""
+        t = read_table(self.release, "met_topology")
+        if t.empty:
+            return
+        t = t[t["level"] == "community"].copy()
+        t["id"] = t["id"].astype(str)
+        for rset in [x for x in ("specific", "all", "active") if x in set(t["set"])]:
+            x = t[t["set"] == rset].set_index("id")
+            for col, lab in self.NET_METRICS:
+                if col not in x.columns:
+                    continue
+                name = "net_%s_%s" % (rset, col)
+                v = pd.to_numeric(x[col], errors="coerce")
+                self._metrics.loc[[i for i in v.index if i in self._metrics.index], name] = \
+                    v[[i for i in v.index if i in self._metrics.index]]
+                METRIC_LABEL[name] = "metabolic network (%s reactions): %s" % (rset, lab)
+        c = read_table(self.release, "met_mag_coverage")
+        for rset in (sorted(set(c["set"])) if len(c) else []):
+            x = c[c["set"] == rset]
+            v = pd.Series(pd.to_numeric(x["share_in_mags"], errors="coerce").values, index=x["sample_id"].astype(str))
+            name = "net_%s_share_in_mags" % rset
+            self._metrics.loc[[i for i in v.index if i in self._metrics.index], name] = \
+                v[[i for i in v.index if i in self._metrics.index]]
+            METRIC_LABEL[name] = "metabolic network (%s reactions): share of the community's reactions in MAGs" % rset
+        self.metric_names = list(self._metrics.columns)
 
     # ------------------------------------------------------------------ metabolomics (imp-explorer metabolomics)
     def metab_assays(self):

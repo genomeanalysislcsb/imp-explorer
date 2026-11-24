@@ -16,7 +16,13 @@
   communities by group with tests, MAG coverage, reactions present more often in one group (with equations and
   ECs), pan-reactomes per rank (core share vs number of MAGs), hub metabolites; for the specific, all or active
   (expressed, metaT) reactions; keystone reactions (Roume et al. 2015: load points with high metaT / metaG) per
-  group when IMP-metabolic wrote them (`met_keystones`).
+  group when IMP-metabolic wrote them (`met_keystones`). Network size against the genes of the sample (scatter,
+  Spearman) and group tests adjusted for the number of genes (residuals of a fit on log10 genes).
+- **cohort** analyses the IMP-metabolic results of a release by default: reaction groups as layers
+  `met.reactions.mg`, `met.reactions.mt` and `ratio.met.reactions` (CLR mt − CLR mg, as the other ratio layers),
+  and the properties of the community networks (reactions, largest component, degree, path length, scope; share
+  of the reactions in MAGs) per reaction set as metrics (`net_<set>_<property>`), with the same tests and models
+  as the other layers.
 
 ## 0.5.0 (2026-11)
 

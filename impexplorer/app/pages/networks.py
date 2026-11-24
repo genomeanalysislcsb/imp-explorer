@@ -66,6 +66,8 @@ def layout(data):
         html.Div([control("reactions", dd("nw-set", set_options(data), "specific")),
                   control("metric", dd("nw-metric", [{"label": v, "value": k} for k, v in METRICS.items()],
                                        "reactions")),
+                  control("adjust for", dd("nw-adj", [{"label": "nothing", "value": ""},
+                                                      {"label": "genes in the sample", "value": "genes"}], "")),
                   control("min. prevalence (reactions)", dd("nw-prev", [0.1, 0.25, 0.5], 0.25))],
                  className="controls"),
         html.Div([card("Community networks by group", graph("nw-box")),
@@ -73,8 +75,15 @@ def layout(data):
                        note="reactions of the high- and medium-quality MAGs / reactions of the community")],
                  className="grid g2"),
         html.Div(style={"height": "16px"}),
+        card("Network size and sample size", graph("nw-size"),
+             note="the chosen property against the number of genes predicted in the sample's assembly: larger "
+                  "assemblies (deeper sequencing, more diverse communities) give larger networks. With 'adjust for "
+                  "genes', box plots and tests use the residuals of a linear fit on log10(genes), shifted to the "
+                  "median"),
+        html.Div(style={"height": "16px"}),
         card("Network properties: differences between groups", html.Div(id="nw-tests"),
-             note="community networks; Kruskal-Wallis (2 groups: Mann-Whitney), BH-FDR"),
+             note="community networks; Kruskal-Wallis (2 groups: Mann-Whitney), BH-FDR over the properties; with "
+                  "'adjust for genes' on the residuals"),
         html.Div(style={"height": "16px"}),
         card("Reactions present more often in one group", html.Div(id="nw-rx"),
              note="presence of each reaction group in the community networks; reactions present in at least the "
@@ -105,18 +114,50 @@ def register(app, data):
     if data.has("met_keystones"):
         register_keystones(app, data, rinfo)
 
+    genes = None
+    if data.has("met_stats"):
+        st_ = data.q("SELECT sample_id, genes FROM met_stats")
+        genes = pd.Series(pd.to_numeric(st_["genes"], errors="coerce").values, index=st_["sample_id"].astype(str))
+
     @app.callback(Output("nw-box", "figure"), Output("nw-cov", "figure"), Output("nw-tests", "children"),
-                  Input("nw-set", "value"), Input("nw-metric", "value"),
+                  Output("nw-size", "figure"),
+                  Input("nw-set", "value"), Input("nw-metric", "value"), Input("nw-adj", "value"),
                   Input(GLOBAL[0], "value"), Input(GLOBAL[1], "value"), Input(GLOBAL[2], "value"),
                   Input(GLOBAL[3], "value"))
-    def _topo(rset, metric, group, fcol, fval, qcm=None):
+    def _topo(rset, metric, adj, group, fcol, fval, qcm=None):
         s, g, cmap = selection(data, group, fcol, fval, qcm, "mg")
         d = topo(data, rset or "specific")
         d = d[d["id"].astype(str).isin(s["sample_id"].astype(str))]
         if d.empty:
-            return empty_fig(), empty_fig(), None
+            return empty_fig(), empty_fig(), None, empty_fig()
         M = d.set_index("id")[[c for c in METRICS if c in d.columns]]
-        box = box_by_group(M[metric], g, cmap, METRICS.get(metric, metric), height=400)
+        M.index = M.index.astype(str)
+        size = empty_fig("needs the mapping statistics (imp-explorer networks with IMP-metabolic >= imet-0008)")
+        if genes is not None:
+            x = genes.reindex(M.index)
+            size = go.Figure()
+            for lv in sorted(g.unique()):
+                ids = [i for i in M.index if g.get(i) == lv]
+                size.add_trace(go.Scatter(x=x[ids], y=M.loc[ids, metric], mode="markers", name=str(lv), text=ids,
+                                          marker=dict(size=7, color=cmap.get(lv), opacity=0.8),
+                                          hovertemplate="%{text}<br>%{x:,.0f} genes<br>%{y:.4g}<extra></extra>"))
+            ok = x.notna() & M[metric].notna()
+            if ok.sum() > 3:
+                rho, p = st.spearmanr(x[ok], M.loc[ok, metric])
+                size.update_layout(title="Spearman rho %.2f (p = %.2g)" % (rho, p))
+            size.update_xaxes(title="genes in the sample", type="log")
+            size.update_yaxes(title=METRICS.get(metric, metric))
+            style(size, 380)
+            if adj == "genes":
+                lx = np.log10(x.where(x > 0))
+                for c in M.columns:
+                    ok = lx.notna() & M[c].notna()
+                    if ok.sum() > 3 and M.loc[ok, c].nunique() > 2:
+                        b = np.polyfit(lx[ok], M.loc[ok, c], 1)
+                        M.loc[ok, c] = M.loc[ok, c] - np.polyval(b, lx[ok]) + M.loc[ok, c].median()
+                        M.loc[~ok, c] = np.nan
+        ylab = METRICS.get(metric, metric) + (" (adjusted for genes)" if adj == "genes" and genes is not None else "")
+        box = box_by_group(M[metric], g, cmap, ylab, height=400)
         c = data.q("SELECT sample_id, share_in_mags FROM met_mag_coverage WHERE \"set\"=?", [rset or "specific"])
         c = pd.Series(pd.to_numeric(c["share_in_mags"], errors="coerce").values, index=c["sample_id"].astype(str))
         cov = box_by_group(c[c.index.isin(s["sample_id"].astype(str))], g, cmap, "share in MAGs", height=400)
@@ -126,7 +167,7 @@ def register(app, data):
             tab = grid("nw-tgrid", t.rename(columns={"feature": "property"}), height=330, fit=True)
         else:
             tab = html.P("choose a 'group by' variable with at least two groups", className="hint")
-        return box, cov, tab
+        return box, cov, tab, size
 
     @app.callback(Output("nw-rx", "children"), Input("nw-set", "value"), Input("nw-prev", "value"),
                   Input(GLOBAL[0], "value"), Input(GLOBAL[1], "value"), Input(GLOBAL[2], "value"),

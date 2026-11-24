@@ -1260,8 +1260,9 @@ def test_networks_layer(tmp_path):
             cov.append({"sample_id": s.lower(), "community_reactions": 100, "in_mags": 90, "share_in_mags": 0.9,
                         "set": rset})
         for r in ["MNXR1", "MNXR2"] + (["MNXR3"] if i % 2 else []):
-            com.append({"sample_id": s.lower(), "mnx_id": r, "n_genes": 1, "n_specific_genes": 1, "mg_reads": 5,
-                        "mt_reads": 2, "confidence": "specific", "variants": 1})
+            com.append({"sample_id": s.lower(), "mnx_id": r, "n_genes": 1, "n_specific_genes": 1,
+                        "mg_reads": 50 + 10 * i, "mt_reads": 20 + 7 * i * (r == "MNXR1"), "confidence": "specific",
+                        "variants": 1})
     pd.DataFrame(rows).to_csv(nets / "topology.tsv.gz", sep="\t", index=False)
     pd.DataFrame([{"set": "active", "id": s.lower(), "mnx_id": "MNXR1", "degree": 4, "betweenness": 0.3,
                    "load": 0.075, "mta": 2.0, "keystone": i % 2 == 0} for i, s in enumerate(sids)]
@@ -1272,6 +1273,8 @@ def test_networks_layer(tmp_path):
                    "accessory": 20, "rare": 0, "set": "specific"}]).to_csv(nets / "pan_summary.tsv.gz", sep="\t",
                                                                           index=False)
     pd.DataFrame(com).to_csv(mp / "community_reactions.tsv.gz", sep="\t", index=False)
+    pd.DataFrame({"sample_id": [s.lower() for s in sids], "genes": [100000 + 5000 * i for i in range(len(sids))]}
+                 ).to_csv(mp / "stats.tsv.gz", sep="\t", index=False)
     pd.DataFrame({"mnx_id": ["MNXR1", "MNXR2", "MNXR3"],
                   "equation": ["1 MNXM99@MNXD1 = 1 MNXM100@MNXD1", "1 MNXM100@MNXD1 = 1 MNXM101@MNXD1",
                                "1 MNXM99@MNXD2 = 1 MNXM99@MNXD1"], "ec_list": ["2.7.1.1", "5.3.1.9", ""]}
@@ -1288,6 +1291,21 @@ def test_networks_layer(tmp_path):
     assert eq["MNXR1"] == "1 D-glucose <=> 1 G6P" and eq["MNXR3"] == "1 D-glucose[e] <=> 1 D-glucose"
     assert "met_topology" in read_manifest(str(rel))["tables"]
     assert set(read_table(str(rel), "met_keystones")["id"]) == set(sids)
+    assert set(read_table(str(rel), "met_stats")["sample_id"]) == set(sids)
+    # cohort: reaction groups as layers (counts, mt/mg ratio) and network properties as metrics
+    try:
+        import scipy  # noqa: F401
+    except ImportError:
+        scipy = None
+    if scipy is not None:
+        from impexplorer.cohort.data import Cohort
+        from impexplorer.cohort import settings
+        a = settings.parse(["--data", str(rel), "--out", str(tmp_path / "coh"), "--group-col", "group",
+                            "--layers", "met.reactions.mg,met.reactions.mt,ratio.met.reactions"])
+        C = Cohort(a)
+        C.load_layers(a.layers)
+        assert {"met.reactions.mg", "met.reactions.mt", "ratio.met.reactions"} <= set(C.layers)
+        assert {"net_specific_reactions", "net_active_reactions", "net_all_share_in_mags"} <= set(C.metric_names)
     try:
         import dash  # noqa: F401
         import duckdb  # noqa: F401
@@ -1309,8 +1327,10 @@ def test_networks_layer(tmp_path):
     fk = Fake()
     page.register(fk, app._imp_data)
     assert page.layout(app._imp_data) is not None
-    box, cov_fig, tab = fk.fns["nw-box.figure"]("specific", "reactions", "group", "", [])
-    assert len(box.data) >= 2 and tab is not None
+    box, cov_fig, tab, size = fk.fns["nw-box.figure"]("specific", "reactions", "", "group", "", [])
+    assert len(box.data) >= 2 and tab is not None and len(size.data) >= 2
+    box2, _, tab2, _ = fk.fns["nw-box.figure"]("specific", "reactions", "genes", "group", "", [])
+    assert len(box2.data) >= 2
     rx = fk.fns["nw-rx.children"]("specific", 0.1, "group", "", [])
     assert rx is not None
     pan, pantab = fk.fns["nw-pan.figure"]("specific", "species")

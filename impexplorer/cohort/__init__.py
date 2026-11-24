@@ -13,7 +13,7 @@ import time
 import pandas as pd
 
 from .. import __version__
-from ..release import read_manifest, table_path, write_table
+from ..release import read_manifest, read_table, table_path, write_table
 from . import settings
 from .data import Cohort, METRIC_LABEL
 from .engine import Analysis
@@ -103,6 +103,11 @@ def main(argv=None):
                                     (("mag.genus",) if "bin_abundance" in tb else ()) +
                                     (("kegg_module", "kegg_pathway", "cazy", "kegg_ko") +
                                      tuple(x for x in ("pfam", "cog") if x in fdbs) if "functions" in tb else ()))
+    if default and table_path(a.data, "met_community_reactions"):    # IMP-metabolic reaction groups
+        mr = read_table(a.data, "met_community_reactions")
+        a.layers += ",met.reactions.mg"
+        if "mt_reads" in mr.columns and pd.to_numeric(mr["mt_reads"], errors="coerce").notna().any():
+            a.layers += ",met.reactions.mt,ratio.met.reactions"
     if default and table_path(a.data, "prot_samples"):
         a.layers += ",prot"                   # metaproteomics: genus and KEGG layers of every fraction
     if a.concordance:                         # the layers the concordance sets need
