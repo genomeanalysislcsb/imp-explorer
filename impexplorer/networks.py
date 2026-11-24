@@ -11,6 +11,8 @@ the IMP-metabolic reference database (--refdb) for readable reaction equations. 
   met_pan_summary         per taxon and rank: MAGs, pan, core, accessory and rare reactions
   met_community_reactions sample x reaction group: confidence, genes, metaG / metaT reads
   met_reactions           the reactions used: equation with metabolite names, ECs (with --refdb)
+  met_keystones           per community network: reactions with degree, betweenness, load, relative expression
+                          (metaT / metaG) and the keystone flag (if IMP-metabolic wrote them)
 
 Sample ids of IMP-metabolic (IMP3 folder names) are translated with --id-map / --id-regex / --id-case as for the
 other layers; MAG ids (sample:bin) follow their sample.
@@ -28,6 +30,7 @@ from .release import read_manifest, read_table, write_table
 TABLES = {"met_topology": ("networks", "topology"), "met_hubs": ("networks", "hubs"),
           "met_mag_coverage": ("networks", "mag_coverage"), "met_pan_summary": ("networks", "pan_summary"),
           "met_community_reactions": ("mapping", "community_reactions")}
+OPTIONAL = {"met_keystones": ("networks", "keystones")}       # IMP-metabolic >= imet-0008 (with metaT)
 
 
 def say(msg):
@@ -80,6 +83,10 @@ def main(argv=None):
         if df is None:
             sys.exit("networks: %s/%s not found" % (a.networks if src == "networks" else a.mapping, f))
         t[name] = df
+    for name, (src, f) in OPTIONAL.items():
+        df = read_any(a.networks if src == "networks" else a.mapping, f)
+        if df is not None and len(df):
+            t[name] = df
     names = sorted(set(t["met_community_reactions"]["sample_id"].astype(str)))
     ids = dict(zip(names, derive_ids(names, read_id_map(a.id_map) if a.id_map else None, a.id_regex, a.id_case)))
 
@@ -92,6 +99,8 @@ def main(argv=None):
     for name, df in t.items():
         if "sample_id" in df.columns:
             df["sample_id"] = tr_sample(df["sample_id"].fillna(""))
+        if name == "met_keystones":
+            df["id"] = tr_sample(df["id"])
         if name in ("met_topology", "met_hubs"):
             lv = df["level"]
             df.loc[lv == "community", "id"] = tr_sample(df.loc[lv == "community", "id"])

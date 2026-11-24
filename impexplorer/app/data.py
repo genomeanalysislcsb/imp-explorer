@@ -20,7 +20,7 @@ PROT_TABLES = ("prot_taxonomy", "prot_functions", "prot_samples", "prot_proteins
 METAB_TABLES = ("metab_assays", "metab_features", "metab_values", "metab_samples")    # 'imp-explorer metabolomics'
 MODULE_TABLES = ("modules", "module_info")                                             # 'imp-explorer modules'
 NETWORK_TABLES = ("met_topology", "met_hubs", "met_mag_coverage", "met_pan_summary", "met_community_reactions",
-                  "met_reactions")                                                       # 'imp-explorer networks'
+                  "met_reactions", "met_keystones")                                                       # 'imp-explorer networks'
 QC_TABLES = ("sample_qc",)                                                            # 'imp-explorer qc'
 # views over the cohort results of IMP3 and of sRNA-IMP (same columns where they mean the same)
 UNION_VIEWS = {"all_tests": ("cohort_tests", "srna_tests"), "all_models": ("cohort_models", "srna_models"),

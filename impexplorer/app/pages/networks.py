@@ -14,8 +14,14 @@ METRICS = {"reactions": "reactions", "metabolites": "metabolites", "components":
            "giant_share": "share in the largest component", "mean_degree": "mean degree",
            "clustering": "clustering coefficient", "mean_path_length": "mean path length",
            "scope_metabolites": "scope: metabolites reachable", "scope_reaction_share": "scope: share of reactions"}
-SETS = [{"label": "specific reactions", "value": "specific"}, {"label": "all reactions (incl. broad ECs)",
-                                                               "value": "all"}]
+SET_LABEL = {"specific": "specific reactions", "all": "all reactions (incl. broad ECs)",
+             "active": "active reactions (expressed, metaT)"}
+
+
+def set_options(data):
+    have = data.distinct("met_topology", '"set"')
+    return [{"label": SET_LABEL.get(x, x), "value": x} for x in ("specific", "all", "active") if x in have] + \
+        [{"label": x, "value": x} for x in have if x not in SET_LABEL]
 
 
 def topo(data, rset, level="community"):
@@ -57,7 +63,7 @@ def layout(data):
                "Specific reactions have KEGG-reaction evidence or come from ECs with few reactions; 'all' adds the "
                "substrate variants of broad ECs. Topology is computed without currency metabolites (ATP, NAD, ...); "
                "the scope is what a network can make from a minimal glucose medium.", className="lead"),
-        html.Div([control("reactions", dd("nw-set", SETS, "specific")),
+        html.Div([control("reactions", dd("nw-set", set_options(data), "specific")),
                   control("metric", dd("nw-metric", [{"label": v, "value": k} for k, v in METRICS.items()],
                                        "reactions")),
                   control("min. prevalence (reactions)", dd("nw-prev", [0.1, 0.25, 0.5], 0.25))],
@@ -82,6 +88,12 @@ def layout(data):
                             "inflated (2 MAGs: shared by both), so compare taxa with similar MAG numbers"),
                   card("Pan-reactomes", html.Div(id="nw-pantab"))], className="grid g2"),
         html.Div(style={"height": "16px"}),
+        card("Keystone reactions", html.Div(id="nw-keys"),
+             note="Roume et al. 2015: reactions with a high betweenness relative to their degree in the reaction "
+                  "graph (load, top 5 %) and a high relative expression (metaT TPM / metaG TPM, top 25 %) in a "
+                  "community network: in how many of the selected communities a reaction is a keystone, median "
+                  "load and relative expression (needs metaT)") if data.has("met_keystones") else html.Div(),
+        html.Div(style={"height": "16px"}) if data.has("met_keystones") else html.Div(),
         card("Hub metabolites of the community networks", html.Div(id="nw-hubs"),
              note="metabolites with the highest betweenness (top 20 per network): in how many of the selected "
                   "communities, median betweenness and degree"),
@@ -90,6 +102,8 @@ def layout(data):
 
 def register(app, data):
     rinfo = data.q("SELECT mnx_id, equation, ec_list FROM met_reactions") if data.has("met_reactions") else None
+    if data.has("met_keystones"):
+        register_keystones(app, data, rinfo)
 
     @app.callback(Output("nw-box", "figure"), Output("nw-cov", "figure"), Output("nw-tests", "children"),
                   Input("nw-set", "value"), Input("nw-metric", "value"),
@@ -187,6 +201,33 @@ def register(app, data):
                                                  degree=("degree", "median"))
         return grid("nw-hgrid", t.sort_values(["communities", "betweenness"], ascending=False).head(200),
                     height=380, fit=True)
+
+
+def register_keystones(app, data, rinfo):
+    @app.callback(Output("nw-keys", "children"), Input("nw-set", "value"),
+                  Input(GLOBAL[0], "value"), Input(GLOBAL[1], "value"), Input(GLOBAL[2], "value"),
+                  Input(GLOBAL[3], "value"))
+    def _keys(rset, group, fcol, fval, qcm=None):
+        s, g, _ = selection(data, group, fcol, fval, qcm, "mt")
+        k = data.q("SELECT * FROM met_keystones WHERE \"set\"=?", [rset or "specific"])
+        k = k[k["id"].astype(str).isin(s["sample_id"].astype(str))]
+        if k.empty:
+            return html.P("no keystone table for this reaction set", className="hint")
+        for c in ("load", "mta", "degree"):
+            k[c] = pd.to_numeric(k[c], errors="coerce")
+        k["keystone"] = k["keystone"].astype(str).str.lower().isin(("true", "1"))
+        t = k.groupby("mnx_id", as_index=False).agg(keystone_in=("keystone", "sum"), communities=("id", "nunique"),
+                                                     load=("load", "median"), mta=("mta", "median"),
+                                                     degree=("degree", "median"))
+        if g.nunique() > 1:
+            kk = k[k["keystone"]].assign(grp=lambda d: d["id"].astype(str).map(g))
+            for lv in sorted(g.unique()):
+                t["keystone in " + str(lv)] = t["mnx_id"].map(kk[kk["grp"] == lv].groupby("mnx_id")["id"].nunique()) \
+                    .fillna(0).astype(int)
+        t = t[t["keystone_in"] > 0].sort_values(["keystone_in", "load"], ascending=False).head(300)
+        if rinfo is not None:
+            t = t.merge(rinfo.rename(columns={"ec_list": "EC"}), on="mnx_id", how="left")
+        return grid("nw-kgrid", t.rename(columns={"mnx_id": "reaction"}), height=400, fit=True)
 
 
 PAGE = Page(path="/networks", name="Networks", order=47, layout=layout, register=register,

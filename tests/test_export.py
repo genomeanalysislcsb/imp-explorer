@@ -1246,7 +1246,7 @@ def test_networks_layer(tmp_path):
         d.mkdir()
     rows, hubs, cov, com = [], [], [], []
     for i, s in enumerate(sids):
-        for rset, k in (("specific", 1), ("all", 2)):
+        for rset, k in (("specific", 1), ("all", 2), ("active", 1)):
             rows.append({"set": rset, "level": "community", "id": s.lower(), "sample_id": s.lower(),
                          "reactions": 100 * k + i, "metabolites": 90 * k, "components": 5, "giant_share": 0.8,
                          "mean_degree": 3.0, "clustering": 0.05, "mean_path_length": 5.0,
@@ -1263,6 +1263,9 @@ def test_networks_layer(tmp_path):
             com.append({"sample_id": s.lower(), "mnx_id": r, "n_genes": 1, "n_specific_genes": 1, "mg_reads": 5,
                         "mt_reads": 2, "confidence": "specific", "variants": 1})
     pd.DataFrame(rows).to_csv(nets / "topology.tsv.gz", sep="\t", index=False)
+    pd.DataFrame([{"set": "active", "id": s.lower(), "mnx_id": "MNXR1", "degree": 4, "betweenness": 0.3,
+                   "load": 0.075, "mta": 2.0, "keystone": i % 2 == 0} for i, s in enumerate(sids)]
+                 ).to_csv(nets / "keystones.tsv.gz", sep="\t", index=False)
     pd.DataFrame(hubs).to_csv(nets / "hubs.tsv.gz", sep="\t", index=False)
     pd.DataFrame(cov).to_csv(nets / "mag_coverage.tsv.gz", sep="\t", index=False)
     pd.DataFrame([{"taxon": "Bacteroides uniformis", "rank": "species", "n_mags": 3, "pan": 100, "core": 80,
@@ -1284,6 +1287,7 @@ def test_networks_layer(tmp_path):
     eq = read_table(str(rel), "met_reactions").set_index("mnx_id")["equation"]
     assert eq["MNXR1"] == "1 D-glucose <=> 1 G6P" and eq["MNXR3"] == "1 D-glucose[e] <=> 1 D-glucose"
     assert "met_topology" in read_manifest(str(rel))["tables"]
+    assert set(read_table(str(rel), "met_keystones")["id"]) == set(sids)
     try:
         import dash  # noqa: F401
         import duckdb  # noqa: F401
@@ -1312,3 +1316,5 @@ def test_networks_layer(tmp_path):
     pan, pantab = fk.fns["nw-pan.figure"]("specific", "species")
     assert len(pan.data) == 1
     assert fk.fns["nw-hubs.children"]("specific", "", []) is not None
+    assert [o["value"] for o in page.set_options(app._imp_data)] == ["specific", "all", "active"]
+    assert fk.fns["nw-keys.children"]("active", "group", "", []) is not None

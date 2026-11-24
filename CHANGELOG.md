@@ -14,7 +14,9 @@
   [IMP-metabolic](https://github.com/genomeanalysislcsb/IMP-metabolic) in the release (`met_topology`, `met_hubs`,
   `met_mag_coverage`, `met_pan_summary`, `met_community_reactions`, `met_reactions`): network properties of the
   communities by group with tests, MAG coverage, reactions present more often in one group (with equations and
-  ECs), pan-reactomes per rank (core share vs number of MAGs), hub metabolites; for the specific or all reactions.
+  ECs), pan-reactomes per rank (core share vs number of MAGs), hub metabolites; for the specific, all or active
+  (expressed, metaT) reactions; keystone reactions (Roume et al. 2015: load points with high metaT / metaG) per
+  group when IMP-metabolic wrote them (`met_keystones`).
 
 ## 0.5.0 (2026-11)
 
