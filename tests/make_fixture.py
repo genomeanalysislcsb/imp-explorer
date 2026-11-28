@@ -3,6 +3,7 @@
 python3 tests/make_fixture.py OUTDIR [n_samples]  ->  OUTDIR/imp/<sample>/..., OUTDIR/metadata.tsv
 """
 import gzip
+import json
 import os
 import random
 import sys
@@ -102,9 +103,26 @@ def make_sample(root, sid, group, rng, old_bracken, folder=None):
               "model_a\t81.1\nmodel_b\t4.3\nnopareil_diversity\t%.3f\n" % (18 + rng.random() * 2))
         w(os.path.join(b, "Stats", o, "mgmt.assembly.contig_flagstat.txt.gz"),
           "%d\n%d\n%d\n0\n0\n0\n%d\n%d\n" % (2 * f * 1.01, 2 * f, 2 * f * 0.01, 2 * f * 0.96, 2 * f * 0.95))
+    # reads per IMP3 filter step (R1): PhiX, host genome, host transcriptome; mt: rRNA first. S01: high host share
+    host = 0.2 if sid == "S01" else 0.005 + 0.01 * rng.random()
+    steps = {"mg": [("fq", 3e7), ("trimmed.fq", 2.97e7), ("trimmed__PhiX_filtered.fq", 2.96e7),
+                    ("trimmed__PhiX_filtered__T2TCHM13v2genomic_filtered.fq", 2.96e7 * (1 - host)),
+                    ("trimmed__PhiX_filtered__T2TCHM13v2genomic_filtered__T2TCHM13v2transcripts_filtered.fq",
+                     2.96e7 * (1 - host) - 1e4), ("preprocessed.fq", 2.9e7)],
+             "mt": [("fq", 3e7), ("trimmed.fq", 2.97e7), ("trimmed.rrna.fq", 0.9e7), ("trimmed__rrna_filtered.fq", 2.07e7),
+                    ("trimmed__rrna_proc.fq", 2.07e7), ("trimmed__rrna_proc__PhiX_filtered.fq", 2.06e7),
+                    ("trimmed__rrna_proc__PhiX_filtered__T2TCHM13v2genomic_filtered.fq", 2.06e7 * (1 - host)),
+                    ("trimmed__rrna_proc__PhiX_filtered__T2TCHM13v2genomic_filtered__T2TCHM13v2transcripts_filtered.fq",
+                     2.06e7 * (1 - host) - 1e4), ("preprocessed.fq", 1.8e7)]}
     w(os.path.join(b, "Stats", "all_stats.tsv.gz"), "type\tstep\tnumber\n" + "".join(
-        "%s\t%s.r1.%s\t%d\n" % (o, o, s, v) for o in ("mg", "mt")
-        for s, v in (("fq", 3e7), ("trimmed.fq", 2.97e7), ("preprocessed.fq", 2.9e7 if o == "mg" else 1.8e7))))
+        "%s\t%s.r1.%s\t%d\n" % (o, o, s, v) for o in ("mg", "mt") for s, v in steps[o]))
+    for o in ("mg", "mt"):
+        w(os.path.join(b, "Stats", o, "fastp.%s.json.gz" % o), json.dumps({
+            "summary": {"sequencing": "paired end (151 cycles + 151 cycles)",
+                        "before_filtering": {"total_reads": 6e7, "read1_mean_length": 151},
+                        "after_filtering": {"total_reads": 5.94e7, "read1_mean_length": 147}},
+            "duplication": {"rate": 0.05 + 0.02 * rng.random()},
+            "insert_size": {"peak": 300, "unknown": 700, "histogram": [0] * 250 + [3] * 100}}))
     # assembly + bins
     contigs, c2b, bins = [], [], []
     for i in range(1, 401):

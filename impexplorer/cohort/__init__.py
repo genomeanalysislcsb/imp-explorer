@@ -24,6 +24,7 @@ RELEASE_TABLES = {   # cohort result -> release table read by the app
     "metrics_tests": "cohort_metric_tests", "permanova": "cohort_permanova", "dispersion": "cohort_dispersion",
     "ordination": "cohort_ordination", "sample_metrics": "cohort_samples", "covariates": "cohort_covariates",
     "qc_flags": "cohort_qc", "mag_prevalence": "cohort_mag_prevalence",
+    "read_processing": "cohort_read_processing", "sample_qc_metrics": "cohort_sample_qc_metrics",
     "paper_anova": "cohort_paper_anova", "paper_permanova": "cohort_paper_permanova",
     "paper_variance": "cohort_paper_variance", "concord_presence": "cohort_concord_presence",
     "concord_alpha": "cohort_concord_alpha", "concord_mantel": "cohort_concord_mantel",
@@ -43,7 +44,7 @@ def write_outputs(C, A, res, a):
                      sep="\t", float_format="%.6g")
     for name, df in res.items():
         if isinstance(df, pd.DataFrame):
-            df.to_csv(os.path.join(sdir if name not in ("sample_metrics", "qc_flags") else tdir,
+            df.to_csv(os.path.join(sdir if name not in ("sample_metrics", "qc_flags", "sample_qc_metrics") else tdir,
                                    "cohort.%s.tsv" % name), sep="\t", index=False, float_format="%.6g")
     with open(os.path.join(sdir, "cohort.findings.tsv"), "w") as fh:
         fh.write("area\tfinding\n")

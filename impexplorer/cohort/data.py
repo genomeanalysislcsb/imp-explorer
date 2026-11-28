@@ -23,6 +23,16 @@ METRIC_LABEL = OrderedDict([
     ("mg_removed_fraction", "mg reads removed after trimming (PhiX, host)"),
     ("mt_rrna_fraction", "mt rRNA reads (share of trimmed)"),
     ("mt_removed_fraction", "mt reads removed after trimming (rRNA, PhiX, host)"),
+    ("mg_host_fraction", "mg reads removed as host (share of trimmed)"),
+    ("mt_host_fraction", "mt reads removed as host (share of trimmed)"),
+    ("mg_phix_fraction", "mg reads removed as PhiX (share of trimmed)"),
+    ("mt_phix_fraction", "mt reads removed as PhiX (share of trimmed)"),
+    ("mg_final_pairs_M", "mg read pairs after all filters (M)"), ("mt_final_pairs_M", "mt read pairs after all filters (M)"),
+    ("mg_overlap_fraction", "mg read pairs with overlapping mates (short inserts)"),
+    ("mt_overlap_fraction", "mt read pairs with overlapping mates (short inserts)"),
+    ("mg_insert_peak", "mg insert size, peak of overlapping pairs (bp)"),
+    ("mt_insert_peak", "mt insert size, peak of overlapping pairs (bp)"),
+    ("mg_dup_fraction", "mg duplicated reads (fastp, raw)"), ("mt_dup_fraction", "mt duplicated reads (fastp, raw)"),
     ("mg_mapped_fraction", "mg reads mapped to the assembly"), ("mt_mapped_fraction", "mt reads mapped to the assembly"),
     ("mg_nonpareil", "Nonpareil diversity (mg)"), ("assembly_Mb", "assembly length (Mb)"),
     ("assembly_n50_kb", "assembly N50 (kb)"), ("mags_hq", "high-quality MAGs"), ("mags_mq", "medium-quality MAGs"),
@@ -31,6 +41,41 @@ METRIC_LABEL = OrderedDict([
 ])
 QC_OUTLIER = {"mg_mapped_fraction": 0.05, "mt_mapped_fraction": 0.05, "mg_removed_fraction": 0.05,
               "mt_rrna_fraction": 0.10, "mg_nonpareil": 0.5, "assembly_n50_kb": 0.5}
+# read-processing metrics of the report (section 'Read processing')
+READ_METRICS = ["mg_pairs_M", "mt_pairs_M", "mg_final_pairs_M", "mt_final_pairs_M", "mg_host_fraction",
+                "mt_host_fraction", "mg_phix_fraction", "mt_phix_fraction", "mt_rrna_fraction", "mg_removed_fraction",
+                "mt_removed_fraction", "mg_overlap_fraction", "mt_overlap_fraction", "mg_insert_peak", "mt_insert_peak",
+                "mg_dup_fraction", "mt_dup_fraction", "mg_mapped_fraction", "mt_mapped_fraction"]
+HOST_REF = re.compile(r"T2T|CHM13|GRCh|hg19|hg38|human|host|homo", re.I)
+
+
+def filter_shares(counts, omic):
+    """read numbers (R1) per IMP3 filter step of one sample {metric: n} (metrics imp:<omic>.r1.trimmed[__<step>...].fq)
+    -> {"trimmed": n, "final": n, "steps": [(reference, share of trimmed removed)]}: each step's loss relative to the
+    step before it (the chain of '__' steps), as a share of the trimmed reads; rRNA steps of the metatranscriptome
+    are reported as 'rrna'"""
+    base, chain = None, []
+    for m, n in counts.items():
+        mm = re.search(r"\b%s\.r1\.(trimmed(?:__[^.]+)?)\.fq(?:\.gz)?$" % omic, m)
+        if not mm or n != n:
+            continue
+        parts = mm.group(1).split("__")
+        if len(parts) == 1:
+            base = float(n)
+        else:
+            chain.append((len(parts), parts[-1], float(n)))
+    if not base or not chain:
+        return None
+    chain.sort()
+    out, prev = [], base
+    for _, step, n in chain:
+        ref = re.sub(r"_(filtered|proc)$", "", step)
+        if ref in ("rrna",) and step == "rrna_proc":       # rRNA reads processed / added back: not a loss
+            prev = n
+            continue
+        out.append(("rrna" if ref == "rrna" else ref, (prev - n) / base))
+        prev = n
+    return {"trimmed": base, "final": prev, "steps": out}
 
 
 def norm_id(x):
@@ -198,6 +243,22 @@ class Cohort:
             rr = [c for c in st.columns if re.search(r"\.r1\.trimmed\.rrna\.fq$", c)]
             if o == "mt" and rr and trimmed:
                 m["mt_rrna_fraction"] = st[rr[0]] / st[trimmed[0]]
+            # share removed per filter reference (host = human genome / transcriptome steps together), final reads
+            for sid, row in st.iterrows():
+                fs = filter_shares(row.to_dict(), o)
+                if not fs:
+                    continue
+                host = sum(v for r, v in fs["steps"] if HOST_REF.search(r))
+                phix = sum(v for r, v in fs["steps"] if r.lower() == "phix")
+                m.loc[sid, "%s_host_fraction" % o] = host
+                m.loc[sid, "%s_phix_fraction" % o] = phix
+                m.loc[sid, "%s_final_pairs_M" % o] = fs["final"] / 1e6
+        for o in ("mg", "mt"):                     # fastp: overlapping mates, insert size, duplication
+            for met, col, scale in (("trimmed:overlap_pct", "overlap_fraction", 100.0), ("trimmed:insert_peak",
+                                     "insert_peak", 1.0), ("raw:dup_pct", "dup_fraction", 100.0)):
+                v = self._qc(o, met)
+                if len(v):
+                    m["%s_%s" % (o, col)] = v / scale
         m["mg_mapped_fraction"] = self._qc("mg", "mapped_fraction")
         m["mt_mapped_fraction"] = self._qc("mt", "mapped_fraction")
         m["mg_nonpareil"] = self._qc("mg", "nonpareil_diversity")
@@ -256,6 +317,22 @@ class Cohort:
                 hits.append(("WARN", "no metatranscriptome reads (mt layers without this sample)"))
             elif mt * 1e6 < self.a.min_mt_pairs:
                 hits.append(("WARN", "mt read pairs %.2g < %.2g (mt layers without this sample)" % (mt * 1e6, self.a.min_mt_pairs)))
+            # absolute read-processing rules (WARN): host share, rRNA share, mapping to the assembly
+            mh = getattr(self.a, "max_host_fraction", None)
+            for o in ("mg", "mt"):
+                col = "%s_host_fraction" % o
+                if mh and col in m.columns and pd.notna(m.at[sid, col]) and m.at[sid, col] > mh:
+                    hits.append(("WARN", "%s host reads %.1f %% > %.1f %%" % (o, 100 * m.at[sid, col], 100 * mh)))
+            mr = getattr(self.a, "max_rrna_fraction", None)
+            if mr and "mt_rrna_fraction" in m.columns and pd.notna(m.at[sid, "mt_rrna_fraction"]) \
+                    and m.at[sid, "mt_rrna_fraction"] > mr:
+                hits.append(("WARN", "mt rRNA reads %.0f %% > %.0f %%" % (100 * m.at[sid, "mt_rrna_fraction"], 100 * mr)))
+            mm = getattr(self.a, "min_mapped_fraction", None)
+            for o in ("mg", "mt"):
+                col = "%s_mapped_fraction" % o
+                if mm and col in m.columns and pd.notna(m.at[sid, col]) and m.at[sid, col] < mm:
+                    hits.append(("WARN", "%s reads mapped to the assembly %.0f %% < %.0f %%"
+                                 % (o, 100 * m.at[sid, col], 100 * mm)))
             rows[sid] = hits
         z = self.a.outlier_z
         if z and z > 0:

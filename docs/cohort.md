@@ -102,6 +102,9 @@ analysis, so groups, reference, blocks and models are the same for all of them.
 | `--name` | `name` | study name | report title |
 | `--min-mg-pairs` | `min_mg_pairs` | 1e6 | FAIL below this many trimmed metagenome read pairs |
 | `--min-mt-pairs` | `min_mt_pairs` | 1e6 | below this, the sample is left out of the metatranscriptome layers (WARN) |
+| `--max-host-fraction` | `max_host_fraction` | 0.05 | WARN above this share of trimmed reads removed as host (human genome and transcriptome steps together), per omic |
+| `--max-rrna-fraction` | `max_rrna_fraction` | 0.9 | WARN above this metatranscriptome rRNA share |
+| `--min-mapped-fraction` | `min_mapped_fraction` | 0.5 | WARN below this share of reads mapped to the assembly, per omic |
 | `--prevalence` | `prevalence` | 0.1 | features with ≥ 10 reads in at least this share of the samples are tested |
 | `--layers` | `layers` | see below | feature sets |
 | `--nmds` | `nmds` | `kraken.genus.mg,kegg_pathway.mg` | layers with an NMDS besides the PCoA; `all` = every layer (about 30 s per layer for 180 samples with 10 starts). sRNA-IMP names (`COHORT_NMDS=genus,fn_kegg_pathway,...`) mean the metagenome layers (`kraken.genus.mg`, `kegg_pathway.mg`); sRNA-only sets are left out |
@@ -140,6 +143,7 @@ the ratios of MAG genera, KEGG modules and KEGG pathways.
 | Key findings | results below the thresholds, by area (a guide to the report, not a result list) |
 | Covariates by group | Kruskal-Wallis / χ² overall and for every comparison |
 | QC | QC rules (see below); depth, host and rRNA share, mapping, Nonpareil, assembly, MAGs by group and block |
+| Read processing | every sample (flags not applied): read pairs after trimming and after all filters, share removed per filter (host, PhiX), rRNA share, overlapping mates and insert size, duplication, mapping; median [IQR] and range overall and per group, boxes, samples flagged by the read rules |
 | Alpha diversity | Shannon and richness of Kraken2 genus and species and of mOTUs species |
 | Metrics by group | every per-sample metric: van Elteren within blocks (effect = P(group > reference)), the block contrast, Kruskal-Wallis |
 | Taxonomic composition | mean relative abundance of the top taxa per group and block (Kraken2, MAGs; mg and mt) |
@@ -158,6 +162,15 @@ the ratios of MAG genera, KEGG modules and KEGG pathways.
 | FAIL | no metagenome reads, or fewer than `--min-mg-pairs` trimmed pairs | left out of all statistics (`--qc-drop FAIL`) |
 | WARN | no metatranscriptome reads, or fewer than `--min-mt-pairs` | left out of the mt and ratio layers only |
 | WARN | robust outlier (\|robust z\| > `--outlier-z` and a relevant absolute difference) in mapping, host share, rRNA share, Nonpareil or assembly N50 | kept, listed (left out with `--qc-drop WARN`) |
+| WARN | host share above `--max-host-fraction`, rRNA share above `--max-rrna-fraction`, mapping below `--min-mapped-fraction` | kept, listed (left out with `--qc-drop WARN`) |
+
+Read-processing metrics come from the release (`qc`): the IMP3 read numbers per filter step (R1, `imp:<omic>.r1.trimmed__<step>_filtered.fq`)
+give the share of the trimmed reads each filter removed (`<omic>_host_fraction`: steps against the human genome /
+transcriptome, e.g. T2T-CHM13, GRCh38; `<omic>_phix_fraction`) and the pairs after all filters; fastp's report gives
+overlapping mates (`<omic>_overlap_fraction`), the insert size peak and duplication. The host share measures human
+DNA / RNA only for IMP3 ≥ 3.1 (`filtering.method: deacon` or `bwa`); the earlier rule (`bwa_any`) also removed many
+microbial pairs of short-insert libraries (Expobiome metaG 12–31 %, metaT 44–53 % of the pairs, < 0.2 % human).
+Overlap, insert size and duplication need a release exported with imp-explorer ≥ this version.
 
 ### Adjusted models
 
@@ -282,9 +295,11 @@ that share of the sample's reads on; the log reports how many taxa each layer ke
 │   ├── cohort.metadata.tsv         merged metadata
 │   ├── cohort.sample_metrics.tsv   per-sample metrics + alpha diversity, group, block
 │   ├── cohort.qc_flags.tsv         QC level and reasons per sample
+│   ├── cohort.sample_qc_metrics.tsv  every sample (flagged ones included): metrics, qc_level, qc_reasons
 │   └── cohort.<layer>.counts.tsv   feature x sample matrices (ratio layers: .log2ratio.tsv), for other tools
 └── stats/
     ├── cohort.design.tsv, cohort.qc_summary.tsv, cohort.covariates.tsv
+    ├── cohort.read_processing.tsv  read-processing metrics: n, median, quartiles, range overall and per group
     ├── cohort.metrics_tests.tsv    metric tests
     ├── cohort.feature_tests.tsv    per layer, feature and comparison: n, medians, effect, p, q
     ├── cohort.permanova.tsv, cohort.dispersion.tsv, cohort.ordination.tsv

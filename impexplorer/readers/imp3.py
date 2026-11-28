@@ -127,6 +127,23 @@ def qc(base, sample):
                 add(o, "%s:avg_len" % tag, sm.get("read1_mean_length"))
                 add(o, "%s:q30_pct" % tag, 100 * sm["q30_rate"] if "q30_rate" in sm else None)
                 add(o, "%s:gc_pct" % tag, 100 * sm["gc_content"] if "gc_content" in sm else None)
+        # insert size (overlapping mates; short inserts) and duplication from fastp's report, also when the read
+        # numbers come from read_stats.tsv
+        if fj:
+            import json
+            try:
+                js = json.loads(text(fj))
+            except ValueError:
+                js = {}
+            if str(js.get("summary", {}).get("sequencing", "")).startswith("paired"):
+                ins = js.get("insert_size") or {}
+                hist, unk = ins.get("histogram") or [], ins.get("unknown") or 0
+                tot = sum(hist) + unk
+                if tot:
+                    add(o, "trimmed:overlap_pct", 100.0 * (tot - unk) / tot)
+                    add(o, "trimmed:insert_peak", ins.get("peak"))
+            if "duplication" in js:
+                add(o, "raw:dup_pct", 100.0 * (js.get("duplication") or {}).get("rate", 0))
         # Nonpareil diversity (mean of R1 / R2)
         vals = []
         for rr in ("r1", "r2"):

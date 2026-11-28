@@ -235,6 +235,17 @@ def test_cohort_on_fixture(tmp_path):
                       "kegg_module.mt,ratio.kegg_module,ratio.mag.genus"] + report)
     assert rc == 0
     c = out / "cohort"
+    # read processing: host / PhiX shares per filter step, insert size, flags
+    rp = pd.read_csv(c / "stats" / "cohort.read_processing.tsv", sep="\t")
+    assert {"mg_host_fraction", "mt_host_fraction", "mg_phix_fraction", "mg_overlap_fraction",
+            "mg_final_pairs_M"} <= set(rp["key"])
+    sq = pd.read_csv(c / "tables" / "cohort.sample_qc_metrics.tsv", sep="\t").set_index("sample_id")
+    assert abs(sq.at["S01", "mg_host_fraction"] - 0.2 * 2.96 / 2.97) < 0.01
+    assert abs(sq.at["S02", "mt_phix_fraction"] - 0.01 / 2.97) < 0.0001
+    assert "mg host reads" in sq.at["S01", "qc_reasons"] and sq.at["S01", "qc_level"] == "WARN"
+    assert abs(sq.at["S02", "mg_overlap_fraction"] - 300 / 1000) < 1e-6
+    if not report:
+        assert "Read processing" in (c / "cohort.report.html").read_text()
     mo = pd.read_csv(c / "stats" / "cohort.models.tsv", sep="\t")
     assert set(mo["model"]) >= {"M1", "M2"} and mo["focus"].any()
     assert {"group: case_a vs control", "group: case_b vs control"} <= set(mo["term"])

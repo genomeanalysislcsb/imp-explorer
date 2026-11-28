@@ -22,7 +22,8 @@ SRNA_KEYS = {
 ALIASES = {"match_col": "block", "group": "group_col", "groups": "group_order", "title": "name"}
 CONFIG_KEYS = ("metadata", "dictionary", "id_col", "group_col", "group_order", "reference", "block", "covariates", "model",
                "model_notes", "permutations", "sig_q", "outlier_z", "qc_drop", "term_names", "name", "layers",
-               "prevalence", "min_mg_pairs", "min_mt_pairs", "nmds", "nmds_starts", "paper_model", "paper_transform",
+               "prevalence", "min_mg_pairs", "min_mt_pairs", "max_host_fraction", "max_rrna_fraction",
+               "min_mapped_fraction", "nmds", "nmds_starts", "paper_model", "paper_transform",
                "paper_qc", "concordance", "contig_min_share", "fraction_pairs", "fraction_min_r")
 IGNORED = {"dir", "min_mirna_reads"}       # sRNA-specific COHORT_* keys without meaning here
 
@@ -114,6 +115,9 @@ qc_drop: FAIL             # FAIL | WARN | none
 prevalence: 0.1
 min_mg_pairs: 1000000
 min_mt_pairs: 1000000
+max_host_fraction: 0.05   # WARN: share of trimmed reads removed as host (human genome / transcriptome) above this
+max_rrna_fraction: 0.9    # WARN: mt rRNA share above this
+min_mapped_fraction: 0.5  # WARN: share of reads mapped to the assembly below this
 term_names:               # term<TAB>name TSVs or KEGG flat files for readable labels
 nmds: kraken.genus.mg,kegg_pathway.mg
 nmds_starts: 5
@@ -172,6 +176,11 @@ def parser():
     ap.add_argument("--min-mg-pairs", type=float, default=None, help="FAIL below this many trimmed mg read pairs")
     ap.add_argument("--min-mt-pairs", type=float, default=None, help="mt layers: sample left out below this many "
                     "trimmed mt read pairs (WARN)")
+    ap.add_argument("--max-host-fraction", type=float, default=None, help="WARN above this share of trimmed reads "
+                    "removed as host (human genome / transcriptome steps)  [0.05]")
+    ap.add_argument("--max-rrna-fraction", type=float, default=None, help="WARN above this mt rRNA share  [0.9]")
+    ap.add_argument("--min-mapped-fraction", type=float, default=None, help="WARN below this share of reads mapped "
+                    "to the assembly  [0.5]")
     ap.add_argument("--qc-drop", default=None, choices=("FAIL", "WARN", "none"), help="samples left out  [FAIL]")
     ap.add_argument("--prevalence", type=float, default=None, help="features with >= 10 reads in at least this share "
                     "of samples are tested  [0.1]")
@@ -211,12 +220,14 @@ def parser():
 DEFAULTS = {"metadata": "", "dictionary": "", "id_col": "", "group_col": "group", "group_order": "", "reference": "", "block": "",
             "covariates": "", "model": "", "model_notes": "", "permutations": 999, "sig_q": 0.1, "outlier_z": 4.0,
             "qc_drop": "FAIL", "term_names": "", "name": "", "layers": DEFAULT_LAYERS, "prevalence": 0.1, "ratio_min_n": 10,
-            "min_mg_pairs": 1e6, "min_mt_pairs": 1e6, "nmds": "kraken.genus.mg,kegg_pathway.mg", "nmds_starts": 5,
+            "min_mg_pairs": 1e6, "min_mt_pairs": 1e6, "max_host_fraction": 0.05, "max_rrna_fraction": 0.9,
+            "min_mapped_fraction": 0.5, "nmds": "kraken.genus.mg,kegg_pathway.mg", "nmds_starts": 5,
             "paper_model": "", "paper_transform": "tss", "paper_qc": "FAIL",
             "concordance": "", "contig_min_share": 1e-5, "fraction_pairs": "",
             "fraction_min_r": 0.5}
 TYPES = {"permutations": int, "nmds_starts": int, "sig_q": float, "outlier_z": float, "prevalence": float, "ratio_min_n": int, "min_mg_pairs": float,
-         "min_mt_pairs": float, "contig_min_share": float, "fraction_min_r": float}
+         "min_mt_pairs": float, "contig_min_share": float, "fraction_min_r": float, "max_host_fraction": float,
+         "max_rrna_fraction": float, "min_mapped_fraction": float}
 
 
 RANKS = ("phylum", "class", "order", "family", "genus", "species")

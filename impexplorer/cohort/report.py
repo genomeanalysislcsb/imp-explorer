@@ -14,7 +14,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt                       # noqa: E402
 from matplotlib.backends.backend_pdf import PdfPages  # noqa: E402
 
-from .data import METRIC_LABEL                        # noqa: E402
+from .data import METRIC_LABEL, READ_METRICS          # noqa: E402
 
 PALETTE = ["#2a6f97", "#d1495b", "#edae49", "#00798c", "#8f5aa8", "#66a182", "#e07a5f", "#3d405b"]
 MARKERS = ["o", "^", "s", "D", "v", "P"]
@@ -44,6 +44,15 @@ EXPLAIN = {
         "statistics); WARN without (enough) metatranscriptome reads (left out of the mt layers) or as robust outlier "
         "(|robust z| above the threshold) in a key metric. Boxes by group and block: differences in depth, host "
         "share, rRNA share or mapping can reflect sampling and extraction rather than biology.",
+    "reads":
+        "Read processing of every sample (flagged ones included): read pairs after trimming and after all filters, the "
+        "share of the trimmed reads removed per filter (host = human genome and transcriptome steps together; PhiX), "
+        "the rRNA share of the metatranscriptome, overlapping mates and insert size (fastp; short inserts), duplicated "
+        "reads and the share mapped to the assembly; median [interquartile range] and range, overall and per group. "
+        "The host share is a measure of human DNA / RNA only for IMP3 >= 3.1 (filtering.method deacon or bwa); with "
+        "the earlier rule (bwa_any) it includes falsely removed microbial pairs of short-insert libraries. Samples "
+        "above the host or rRNA limits or below the mapping limit get WARN (QC page, cohort_qc table, qc_level / "
+        "qc_reasons in cohort.sample_qc_metrics.tsv).",
     "alpha":
         "Within-sample diversity: Shannon index and richness (taxa with reads) of the read-based profiles. Richness "
         "depends on sequencing depth; compare it with the depth panels of the QC page.",
@@ -212,6 +221,33 @@ class Report:
         fl = fl[fl["level"] != "PASS"][["sample_id", "group", "block", "level", "excluded", "reasons"]]
         items.append(("table", "Samples with WARN or FAIL (%d)" % len(fl), fl))
         self.add("qc", "QC", *items)
+
+    def s_reads(self):
+        rp = self.res.get("read_processing")
+        if rp is None or not len(rp):
+            return
+        items = [("text", "%d samples (QC flags not applied here)." % len(self.C.samples))]
+
+        def cell(r):
+            pct = "fraction" in r["key"]
+            f = (lambda v: "%.1f %%" % (100 * v)) if pct else (lambda v: "%.3g" % v)
+            return "%s [%s–%s]; %s–%s" % (f(r["median"]), f(r["q25"]), f(r["q75"]), f(r["min"]), f(r["max"]))
+        t = rp.assign(value=rp.apply(cell, axis=1))
+        piv = t.pivot_table(index=["metric"], columns="group", values="value", aggfunc="first")
+        order = [METRIC_LABEL.get(k, k) for k in READ_METRICS if METRIC_LABEL.get(k, k) in piv.index]
+        piv = piv.reindex(order)
+        cols = ["all"] + [g for g in (self.C.groups or []) if g in piv.columns]
+        items.append(("table", "median [IQR]; range", piv[cols].reset_index()))
+        fig = self.box_grid([k for k in READ_METRICS if k in set(rp["key"])])
+        if fig:
+            self.legend_fig(fig)
+            fig.subplots_adjust(bottom=0.06)
+            items.append(("fig", fig))
+        fl = self.res["qc_flags"]
+        rule = fl["reasons"].fillna("").str.contains("host|rRNA|mapped|pairs")
+        fl = fl[rule][["sample_id", "group", "block", "level", "excluded", "reasons"]]
+        items.append(("table", "Samples flagged by the read-processing rules (%d)" % len(fl), fl))
+        self.add("reads", "Read processing", *items)
 
     def s_alpha(self):
         ms = [m for m in self.res["sample_metrics"].columns if m.startswith(("shannon_", "richness_"))]
@@ -495,7 +531,7 @@ class Report:
         self.add("methods", "Settings and notes", ("table", "", pd.DataFrame(rows, columns=["setting", "value"])))
 
     def build(self):
-        for fn in (self.s_design, self.s_findings, self.s_covariates, self.s_qc, self.s_alpha, self.s_metric_tests,
+        for fn in (self.s_design, self.s_findings, self.s_covariates, self.s_qc, self.s_reads, self.s_alpha, self.s_metric_tests,
                    self.s_composition, self.s_beta, self.s_features, self.s_models, self.s_mags, self.s_ratio,
                    self.s_dispersion, self.s_methods):
             try:

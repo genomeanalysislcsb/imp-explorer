@@ -2,6 +2,14 @@
 
 ## unreleased
 
+- cohort: **read processing** section in the report (every sample, flags not applied): read pairs after trimming and
+  after all filters, share of the trimmed reads removed per filter (`mg_host_fraction` / `mt_host_fraction`: human
+  genome and transcriptome steps together; `*_phix_fraction`; from the IMP3 read numbers per step), rRNA share,
+  overlapping mates, insert size peak and duplication (fastp; read by `export` from now on), mapping; median [IQR]
+  and range overall and per group (`stats/cohort.read_processing.tsv`). New WARN rules `--max-host-fraction`
+  (0.05), `--max-rrna-fraction` (0.9), `--min-mapped-fraction` (0.5); `tables/cohort.sample_qc_metrics.tsv` lists
+  every sample with its metrics, `qc_level` and `qc_reasons` for exclusion downstream.
+
 - cohort: mt/mg ratio layers are missing where a feature has < 10 metagenome reads in a sample (before: CLR(0) − CLR(0), i.e. the sample's mt vs mg offset, which turned sparse features into presence/absence tests); features are compared on the samples with a ratio, with >= `--ratio-min-n` (10) per side. Changes the results of all `ratio.*` layers.
 
 - **Taxon-resolved activity**: `imp-explorer networks --activity` imports IMP-metabolic's `taxon_activity` (genus ×

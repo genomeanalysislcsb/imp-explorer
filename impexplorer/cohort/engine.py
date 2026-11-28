@@ -4,7 +4,7 @@ import time
 import numpy as np
 import pandas as pd
 
-from .data import METRIC_LABEL
+from .data import METRIC_LABEL, READ_METRICS
 from .stats import (TERM_NAMES, bh, bray_curtis, chi2_test, clr, design_matrix, design_ok, euclidean_z, kruskal,
                     log_values, mannwhitney,
                     nmds, ols_hc3, pcoa, permanova, permanova_partial, van_elteren, isolated_samples)
@@ -173,6 +173,19 @@ class Analysis:
         q = pd.DataFrame(rows, columns=["group", "samples", "PASS", "WARN", "FAIL", "excluded"])
         q.attrs["p_excluded"] = p
         self.res["qc_summary"] = q
+        # read processing over all samples (QC flags not applied: the numbers show what was flagged)
+        M = C.metrics
+        rows = []
+        for m in [x for x in READ_METRICS if x in M.columns]:
+            for g in ["all"] + (C.groups or []):
+                x = M[m] if g == "all" else M.loc[[s for s in M.index if C.group(s) == g], m]
+                x = x.dropna().astype(float)
+                if not len(x):
+                    continue
+                rows.append([METRIC_LABEL.get(m, m), m, g, len(x), x.median(), x.quantile(0.25), x.quantile(0.75),
+                             x.min(), x.max()])
+        self.res["read_processing"] = pd.DataFrame(rows, columns=["metric", "key", "group", "n", "median", "q25", "q75",
+                                                                   "min", "max"])
 
     # ------------------------------------------------------------------ metrics, alpha diversity
     def metrics(self):
@@ -195,6 +208,13 @@ class Analysis:
         out.insert(0, "block", [C.block_of(s) for s in out.index])
         out.insert(0, "group", [C.group(s) for s in out.index])
         self.res["sample_metrics"] = out.reset_index()
+        # all samples with their QC level and reasons (the flagged ones included): for exclusion downstream
+        allm = C.metrics.copy()
+        allm.insert(0, "qc_reasons", C.qc_flags["reasons"].reindex(allm.index))
+        allm.insert(0, "qc_level", C.qc_flags["level"].reindex(allm.index))
+        allm.insert(0, "block", [C.block_of(s) for s in allm.index])
+        allm.insert(0, "group", [C.group(s) for s in allm.index])
+        self.res["sample_qc_metrics"] = allm.reset_index()
 
     # ------------------------------------------------------------------ features
     def features(self):
